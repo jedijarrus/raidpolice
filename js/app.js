@@ -916,23 +916,28 @@
   function renderPlayerName(name) {
     const link = `<a href="#player/${encodeURIComponent(name)}" class="player-link">`;
     const end = '</a>';
-    if (name === 'Ivanera') {
-      return `${link}<span class="wackelnera" data-orig="Ivanera" data-alt="Wackelnera" onmouseenter="this.textContent=this.dataset.alt" onmouseleave="this.textContent=this.dataset.orig">Ivanera</span>${end}`;
-    }
-    if (name === 'Alirya') {
-      return `${link}<span class="alirya-wrapper"><span class="alirya-name">${escapeHtml(name)}</span><span class="no-glaives-popup">No Glaives</span></span>${end}`;
-    }
-    if (name === 'Claudiamarie') {
-      return `${link}<span class="claudia-trigger" onmouseenter="document.body.classList.add('girly-mode','girly-cursor')" onmouseleave="document.body.classList.remove('girly-mode','girly-cursor')">${escapeHtml(name)}</span>${end}`;
-    }
-    if (name === 'Nisali') {
-      return `${link}<span class="nisali-wrapper"><span class="nisali-name">N<span class="nisali-i">i</span><span class="nisali-a">a</span>sali</span></span>${end}`;
-    }
-    if (name === 'Nofax') {
-      return `${link}<span class="wackelnera" data-orig="Nofax" data-alt="Lootfax" onmouseenter="this.textContent=this.dataset.alt" onmouseleave="this.textContent=this.dataset.orig">Nofax</span>${end}`;
-    }
-    if (name === 'Lyserie') {
-      return `${link}<span class="lyserie-wrapper" data-orig="Lyserie" data-alt="Slackerie" onmouseenter="this.firstChild.textContent=this.dataset.alt" onmouseleave="this.firstChild.textContent=this.dataset.orig"><span>Lyserie</span></span>${end}`;
+    const eggs = (window._branding && window._branding.easterEggs) || [];
+    const egg = eggs.find(e => e && e.name === name);
+    if (egg) {
+      const safeName = escapeHtml(name);
+      if (egg.type === 'wobble' && egg.alt) {
+        const alt = escapeHtml(egg.alt);
+        return `${link}<span class="egg-wobble" data-orig="${safeName}" data-alt="${alt}" onmouseenter="this.textContent=this.dataset.alt" onmouseleave="this.textContent=this.dataset.orig">${safeName}</span>${end}`;
+      }
+      if (egg.type === 'popup' && egg.text) {
+        return `${link}<span class="egg-popup"><span class="egg-popup-name">${safeName}</span><span class="egg-popup-text">${escapeHtml(egg.text)}</span></span>${end}`;
+      }
+      if (egg.type === 'girly') {
+        return `${link}<span class="egg-girly" onmouseenter="document.body.classList.add('girly-mode','girly-cursor')" onmouseleave="document.body.classList.remove('girly-mode','girly-cursor')">${safeName}</span>${end}`;
+      }
+      if (egg.type === 'letterswap') {
+        // Nisali → swappt i↔a per Hover (CSS-Animation)
+        return `${link}<span class="egg-letterswap"><span class="egg-letterswap-name">N<span class="egg-letterswap-orig">i</span><span class="egg-letterswap-alt">a</span>sali</span></span>${end}`;
+      }
+      if (egg.type === 'slacker-wobble' && egg.alt) {
+        const alt = escapeHtml(egg.alt);
+        return `${link}<span class="egg-slacker-wobble" data-orig="${safeName}" data-alt="${alt}" onmouseenter="this.firstChild.textContent=this.dataset.alt" onmouseleave="this.firstChild.textContent=this.dataset.orig"><span>${safeName}</span></span>${end}`;
+      }
     }
     return `${link}${escapeHtml(name)}${end}`;
   }
@@ -3413,16 +3418,6 @@
     'Heiler heilen sich auch selbst. Theoretisch. Manchmal.',
     'Tank pullt. DPS wartet. So rum, nicht andersrum.',
 
-    // ── Insider ──
-    'Wir sind offiziell in der Ivanera. Wie die Taylor-Swift-Eras, nur in Bärenform und mit mehr Threat.',
-    'Offiziell in der Ivan-Era. Wie unter Iwan dem Schrecklichen — nur in Bärenform und mit weniger Boyaren.',
-    'Ivanera: Wusstet ihr, dass sein Char 10% langsamer läuft durch den ganzen Loot, den er mitrumtragen „muss"?',
-    'NoFax steht für „Never Out of Fury, Always Xtra-Rage“. So zumindest die offizielle Lesart.',
-    'NoFax: erklärter Fax-Hasser. Sendet trotzdem täglich 1000+ Sunder-Notifications direkt an den Boss.',
-    'Uwuxd: legendärer Failpull im BWL-Trash. Wird seitdem mit Arena-Rating kompensiert.',
-    'Gebt Kauer immer alle grünen und blauen Items — das Gold dafür gibt es GARANTIERT per Post mit Zinsen!',
-    'Für Parsetaktiken muss man den Boss dann auch wirklich töten.',
-
     // ── Klassische WoW-Memes ──
     '„Leeeeeroy Jenkins!" — der älteste Pull-Befehl der WoW-Geschichte. Funktioniert seit 2005 in 0% der Fälle.',
     '„Many whelps! Handle it!" — Onyxia, 2006. Heute übertragbar auf jede Add-Phase.',
@@ -3556,7 +3551,15 @@
     if (!container) return;
 
     if (!data.active || !data.reportCode) {
-      container.innerHTML = '<p class="text-muted">Kein Live-Raid erkannt. Der Ticker sucht Di/Do ab 19:30 automatisch nach aktiven 25-Man Raids.</p>';
+      const sched = (window._branding && window._branding.raidSchedule) || [];
+      let msg = 'Kein Live-Raid erkannt. Der Ticker sucht automatisch nach aktiven Raids.';
+      if (sched.length) {
+        const dayMap = { 1: 'Mo', 2: 'Di', 3: 'Mi', 4: 'Do', 5: 'Fr', 6: 'Sa', 7: 'So' };
+        const days = sched.map(s => dayMap[s.dayOfWeek] || '?').join('/');
+        const times = [...new Set(sched.map(s => s.startTime).filter(Boolean))].join('/');
+        msg = `Kein Live-Raid erkannt. Der Ticker sucht ${days}${times ? ' ab ' + times : ''} automatisch nach aktiven Raids.`;
+      }
+      container.innerHTML = `<p class="text-muted">${escapeHtml(msg)}</p>`;
       return;
     }
 
@@ -4786,11 +4789,13 @@
       const nameHtml = `<span class="first-death first-death--loser"><span class="first-death-name ${fdCss}"><strong>${escapeHtml(first.name)}</strong></span><span class="first-death-gag" aria-hidden="true">Loooooooooooooser</span></span>`;
       evs.push({ sec: +first.sinceStartSec, icon: '💀', text: `Erster Tod: ${nameHtml} — ${escapeHtml(kb)} <small class="text-muted">von ${escapeHtml(src)}</small>` });
     }
-    // Tank-Tode (separat hervorgehoben — bei Nofax: Pppappfax-Wackel-Easter-Egg)
+    // Tank-Tode (separat hervorgehoben — easter-egg via Branding-Config)
+    const tankDeathEggs = ((window._branding && window._branding.easterEggs) || [])
+      .filter(e => e && e.type === 'tank-death-wobble');
     for (const td of ((ex.tankInfo && ex.tankInfo.deaths) || [])) {
-      const isNofax = (td.name || '').toLowerCase() === 'nofax';
-      if (isNofax) {
-        const nameHtml = `<span class="first-death first-death--nofax"><span class="first-death-name"><strong>${escapeHtml(td.name)}</strong></span><span class="first-death-gag" aria-hidden="true">Pppappfax</span></span>`;
+      const egg = tankDeathEggs.find(e => (e.name || '').toLowerCase() === (td.name || '').toLowerCase());
+      if (egg) {
+        const nameHtml = `<span class="first-death egg-tank-death"><span class="first-death-name"><strong>${escapeHtml(td.name)}</strong></span><span class="first-death-gag" aria-hidden="true">${escapeHtml(egg.alt || egg.text || td.name)}</span></span>`;
         evs.push({ sec: td.atSec, icon: '🛡', text: `Tank ${nameHtml} stirbt` });
       } else {
         evs.push({ sec: td.atSec, icon: '🛡', text: `Tank <strong>${escapeHtml(td.name)}</strong> stirbt` });
@@ -7297,12 +7302,28 @@
   // ─── INIT ───
 
   function init() {
+    initBranding();
     initTheme();
     initTabs();
     initSetup();
     initActions();
     initLiveTicker();
     initAdmin();
+  }
+
+  // Lädt App-Name + Gilden-Branding vom Server und befüllt Title/Header
+  async function initBranding() {
+    try {
+      const res = await fetch('/api/branding');
+      if (!res.ok) return;
+      const b = await res.json();
+      if (b.appName) {
+        document.title = b.appName;
+        const logo = document.getElementById('btn-home');
+        if (logo) logo.textContent = b.appName;
+      }
+      window._branding = b;
+    } catch (_) { /* fail silent — defaults bleiben */ }
   }
 
   // Generate girly mode particles

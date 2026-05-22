@@ -11,8 +11,23 @@ const cache = require('./db');
 
 const PORT = 3000;
 const CSRF_TOKEN = crypto.randomBytes(32).toString('hex');
-const TMB_ATTENDANCE_URL = 'https://thatsmybis.com/23865/plague/export/attendance/csv';
 const TMB_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// TMB URLs aus den Settings konstruieren (tmbGuildId + tmbGuildSlug)
+function getTmbUrls() {
+  const guildId = cache.getSetting('tmbGuildId');
+  const guildSlug = cache.getSetting('tmbGuildSlug');
+  if (!guildId || !guildSlug) {
+    return { configured: false, attendance: null, loot: null, raidgroups: null };
+  }
+  const base = `https://thatsmybis.com/${encodeURIComponent(guildId)}/${encodeURIComponent(guildSlug)}/export`;
+  return {
+    configured: true,
+    attendance: `${base}/attendance/csv`,
+    loot: `${base}/loot/csv/received`,
+    raidgroups: `${base}/raid-groups/csv`,
+  };
+}
 // Support both classic and fresh WCL endpoints
 const WCL_API_BASES = {
   classic: 'https://classic.warcraftlogs.com/v1',
@@ -351,9 +366,6 @@ function parseTmbLootCsv(csv) {
   return { loot };
 }
 
-const TMB_LOOT_URL = 'https://thatsmybis.com/23865/plague/export/loot/csv/received';
-const TMB_RAIDGROUPS_URL = 'https://thatsmybis.com/23865/plague/export/raid-groups/csv';
-
 function parseTmbRaidGroupsCsv(csv) {
   const lines = csv.split('\n').filter(l => l.trim());
   if (lines.length < 2) return { members: {} };
@@ -412,6 +424,22 @@ const server = http.createServer(async (req, res) => {
 async function handleRequest(req, res) {
   const parsed = new URL(req.url, `http://localhost:${PORT}`);
 
+  // ─── Public Branding endpoint (vor CSRF, vor Auth — wird beim Pageload geholt) ───
+  if (parsed.pathname === '/api/branding' && req.method === 'GET') {
+    const appName = cache.getSetting('appName') || 'Raidpolice';
+    const guildName = cache.getSetting('guildName') || '';
+    const serverName = cache.getSetting('serverName') || '';
+    const region = cache.getSetting('region') || '';
+    const faction = cache.getSetting('faction') || '';
+    let easterEggs = [];
+    try { easterEggs = JSON.parse(cache.getSetting('easterEggs') || '[]'); } catch (_) {}
+    let raidSchedule = [];
+    try { raidSchedule = JSON.parse(cache.getSetting('raidSchedule') || '[]'); } catch (_) {}
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ appName, guildName, serverName, region, faction, easterEggs, raidSchedule }));
+    return;
+  }
+
   // ─── Live ticker endpoint (no CSRF needed, read-only) ───
   if (parsed.pathname === '/api/live/status' && req.method === 'GET') {
     const simPath = path.join(__dirname, 'data', 'live-sim-state.json');
@@ -448,7 +476,8 @@ async function handleRequest(req, res) {
   if (parsed.pathname === '/api/settings' && req.method === 'GET') {
     const all = cache.getAllSettings();
     // FIX #1: Only return safe, non-sensitive settings
-    const SAFE_KEYS = ['guildName', 'serverName', 'region',
+    const SAFE_KEYS = ['guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug',
+      'raidSchedule', 'easterEggs',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
     const safe = {};
@@ -463,7 +492,8 @@ async function handleRequest(req, res) {
   }
 
   if (parsed.pathname === '/api/settings' && req.method === 'POST') {
-    const ALLOWED_SETTINGS = ['apiKey', 'guildName', 'serverName', 'region',
+    const ALLOWED_SETTINGS = ['apiKey', 'guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug', 'tmbCookie',
+      'raidSchedule', 'easterEggs',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
     try {
@@ -1559,7 +1589,13 @@ async function handleRequest(req, res) {
     }
 
     try {
-      const csvData = await tmbFetch(TMB_ATTENDANCE_URL, tmbCookie);
+      const tmbUrls = getTmbUrls();
+      if (!tmbUrls.configured) {
+        res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'TMB guild not configured' }));
+        return;
+      }
+      const csvData = await tmbFetch(tmbUrls.attendance, tmbCookie);
       const attendance = parseTmbCsv(csvData);
       const json = JSON.stringify(attendance);
       cache.putCache(cacheKey, json);
@@ -1592,7 +1628,13 @@ async function handleRequest(req, res) {
     }
 
     try {
-      const csvData = await tmbFetch(TMB_LOOT_URL, tmbCookie);
+      const tmbUrls = getTmbUrls();
+      if (!tmbUrls.configured) {
+        res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'TMB guild not configured' }));
+        return;
+      }
+      const csvData = await tmbFetch(tmbUrls.loot, tmbCookie);
       const lootData = parseTmbLootCsv(csvData);
       const json = JSON.stringify(lootData);
       cache.putCache(cacheKey, json);
@@ -1625,7 +1667,13 @@ async function handleRequest(req, res) {
     }
 
     try {
-      const csvData = await tmbFetch(TMB_RAIDGROUPS_URL, tmbCookie);
+      const tmbUrls = getTmbUrls();
+      if (!tmbUrls.configured) {
+        res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'TMB guild not configured' }));
+        return;
+      }
+      const csvData = await tmbFetch(tmbUrls.raidgroups, tmbCookie);
       const rgData = parseTmbRaidGroupsCsv(csvData);
       const json = JSON.stringify(rgData);
       cache.putCache(cacheKey, json);
@@ -2074,10 +2122,12 @@ server.listen(PORT, () => {
   async function tmbBackgroundRefresh() {
     const tmbCookie = cache.getSetting('tmbCookie');
     if (!tmbCookie) return;
+    const tmbUrls = getTmbUrls();
+    if (!tmbUrls.configured) return;
     const jobs = [
-      { url: TMB_ATTENDANCE_URL, key: 'tmb_attendance', parse: parseTmbCsv, label: 'attendance' },
-      { url: TMB_LOOT_URL, key: 'tmb_loot', parse: parseTmbLootCsv, label: 'loot' },
-      { url: TMB_RAIDGROUPS_URL, key: 'tmb_raidgroups', parse: parseTmbRaidGroupsCsv, label: 'raidgroups' },
+      { url: tmbUrls.attendance, key: 'tmb_attendance', parse: parseTmbCsv, label: 'attendance' },
+      { url: tmbUrls.loot, key: 'tmb_loot', parse: parseTmbLootCsv, label: 'loot' },
+      { url: tmbUrls.raidgroups, key: 'tmb_raidgroups', parse: parseTmbRaidGroupsCsv, label: 'raidgroups' },
     ];
     for (const job of jobs) {
       try {
