@@ -4292,7 +4292,7 @@
   function loadAllAdmin() {
     loadAdminReports(); loadAdminPenalties(); loadAdminRevoked(); loadAdminExcused(); loadAdminExcusedPlayers(); loadAdminExcludedPlayers(); loadAdminPlayerRoles(); loadAdminJoinDates(); loadAdminChangelog(); loadSysinfo(); loadRaidDateDropdowns();
     loadDataStatus(); loadPipelineStatus(); loadElixirPolicyEditor(); loadTrackingConfig();
-    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor();
+    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadSimControl();
     if (adminRole === 'superadmin') loadAdminUsers();
   }
 
@@ -4434,6 +4434,64 @@
     tbody.querySelectorAll('button[data-rm]').forEach(btn => {
       btn.addEventListener('click', () => { sched.splice(+btn.dataset.rm, 1); renderRaidScheduleRows(); });
     });
+  }
+
+  // ─── Admin: Live-Ticker Sim ───
+  async function loadSimControl() {
+    const sel = $('#sim-report-select');
+    const btnStart = $('#btn-sim-start');
+    const btnStop = $('#btn-sim-stop');
+    const status = $('#sim-status');
+    if (!sel || !btnStart || !btnStop) return;
+    // Recent reports laden
+    try {
+      const r = await apiFetch('/api/admin/sim/recent-reports');
+      const list = await r.json();
+      const opts = ['<option value="">— Neuester Report —</option>'];
+      for (const rep of list) {
+        const date = rep.start ? new Date(rep.start).toISOString().slice(0, 10) : '';
+        const z = (CLA_DATA.zones[rep.zone] && CLA_DATA.zones[rep.zone].short) || '?';
+        opts.push(`<option value="${escapeHtml(rep.code)}">${escapeHtml(date)} · ${z} · ${escapeHtml(rep.title || rep.code)}</option>`);
+      }
+      sel.innerHTML = opts.join('');
+    } catch (_) {}
+    // Status refreshen
+    async function refresh() {
+      try {
+        const r = await apiFetch('/api/admin/sim/status');
+        const s = await r.json();
+        if (s.running) {
+          const since = s.startedAt ? new Date(s.startedAt).toLocaleTimeString() : '';
+          status.innerHTML = `<span style="color:#4ade80">● Läuft</span> — Report: <code>${escapeHtml(s.reportCode || '?')}</code> seit ${since}`;
+        } else {
+          status.innerHTML = '<span style="color:#888">○ Gestoppt</span>';
+        }
+      } catch (_) { status.textContent = 'Status nicht ermittelbar'; }
+    }
+    refresh();
+    if (!btnStart._wired) {
+      btnStart._wired = true;
+      btnStart.addEventListener('click', async () => {
+        const reportCode = sel.value;
+        status.textContent = 'Starte...';
+        try {
+          const r = await apiFetch('/api/admin/sim/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reportCode }) });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || 'Fehler');
+          setTimeout(refresh, 800);
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
+    if (!btnStop._wired) {
+      btnStop._wired = true;
+      btnStop.addEventListener('click', async () => {
+        status.textContent = 'Stoppe...';
+        try {
+          await apiFetch('/api/admin/sim/stop', { method: 'POST' });
+          setTimeout(refresh, 500);
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
   }
 
   // ─── Admin: Easter Eggs ───

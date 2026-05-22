@@ -601,6 +601,25 @@
 
           <div class="penalty-card penalty-card--info">
             <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#9654;</div>
+              <div>
+                <h3 class="penalty-card__title">Live-Ticker Simulation</h3>
+                <p class="penalty-card__desc">Simuliert einen Live-Raid mit Daten aus einem gecachten Report. Default: neuester Report.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Report</label>
+                <select id="sim-report-select" class="penalty-input"><option value="">— Neuester Report —</option></select>
+              </div>
+              <button id="btn-sim-start" class="penalty-btn penalty-btn--add">▶ Starten</button>
+              <button id="btn-sim-stop" class="penalty-btn">■ Stoppen</button>
+            </div>
+            <div id="sim-status" class="penalty-card__status text-muted">Lade Status...</div>
+          </div>
+
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
               <div class="penalty-card__icon">&#128260;</div>
               <div>
                 <h3 class="penalty-card__title">TMB Daten laden</h3>
@@ -832,6 +851,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=148"></script>
+  <script src="js/app.js?v=149"></script>
 </body>
 </html>

@@ -128,6 +128,9 @@ setInterval(() => {
 // Track running re-analysis jobs
 const reanalyzeJobs = new Map(); // reportCode -> { status, startedAt, error? }
 
+// Live-Ticker Simulation Child Process Handle
+let simProc = null;
+
 // ─── Pre-analyze pipeline state (set by preanalyze.js progress reporter) ───
 const pipelineState = {
   phase: 'idle',                 // 'idle' | 'fetch-reports' | 'analyzing'
@@ -651,6 +654,88 @@ async function handleRequest(req, res) {
     const penaltyCount = d.prepare('SELECT COUNT(*) as cnt FROM attendance_penalties').get().cnt;
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
     res.end(JSON.stringify({ cacheEntries: stats.entries, oldestCache: stats.oldestTs, reportCount, analysisCount, penaltyCount }));
+    return;
+  }
+
+  // ─── Admin: Live-Ticker Simulation (Start/Stop/Status) ───
+  if (parsed.pathname === '/api/admin/sim/status' && req.method === 'GET') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({
+      running: simProc ? !simProc.killed && simProc.exitCode == null : false,
+      reportCode: simProc ? simProc._reportCode : null,
+      startedAt: simProc ? simProc._startedAt : null,
+    }));
+    return;
+  }
+  if (parsed.pathname === '/api/admin/sim/start' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      let reportCode = (body.reportCode || '').trim();
+      // Fallback: neuester Report aus dem Cache
+      if (!reportCode) {
+        const row = cache.getDb().prepare('SELECT report_code FROM report_data ORDER BY json_extract(meta_json, "$.start") DESC LIMIT 1').get();
+        reportCode = row ? row.report_code : null;
+      }
+      if (!reportCode) { res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Keine Reports im Cache' })); return; }
+      // Bestehende Sim killen falls vorhanden
+      if (simProc && simProc.exitCode == null) {
+        try { simProc.kill('SIGTERM'); } catch (_) {}
+      }
+      const { spawn } = require('child_process');
+      simProc = spawn('node', [path.join(__dirname, 'simulate-live.js'), reportCode], {
+        cwd: __dirname,
+        detached: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      simProc._reportCode = reportCode;
+      simProc._startedAt = Date.now();
+      simProc.stdout.on('data', d => console.log('[SIM]', d.toString().trim()));
+      simProc.stderr.on('data', d => console.error('[SIM]', d.toString().trim()));
+      simProc.on('exit', (code) => { console.log(`[SIM] Process exited with code ${code}`); });
+      logAction(req, 'sim_start', { reportCode });
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true, reportCode, pid: simProc.pid }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (parsed.pathname === '/api/admin/sim/stop' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      if (simProc && simProc.exitCode == null) {
+        simProc.kill('SIGTERM');
+      }
+      // State-File wegräumen
+      const stateFile = path.join(__dirname, 'data', 'live-sim-state.json');
+      try { fs.unlinkSync(stateFile); } catch (_) {}
+      simProc = null;
+      logAction(req, 'sim_stop', {});
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (parsed.pathname === '/api/admin/sim/recent-reports' && req.method === 'GET') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const rows = cache.getDb().prepare('SELECT report_code, meta_json FROM report_data ORDER BY json_extract(meta_json, "$.start") DESC LIMIT 20').all();
+      const out = rows.map(r => {
+        const m = JSON.parse(r.meta_json || '{}');
+        return { code: r.report_code, title: m.title, start: m.start, zone: m.zone };
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify(out));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
 

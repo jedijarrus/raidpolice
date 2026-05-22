@@ -120,5 +120,6 @@ function cleanup() {
 }
 
 process.on('SIGINT', () => { cleanup(); process.exit(); });
+process.on('SIGTERM', () => { cleanup(); process.exit(); });
 
 simulate().catch(e => { console.error('[SIM] Fatal:', e); cleanup(); process.exit(1); });
