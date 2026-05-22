@@ -347,6 +347,74 @@ input:focus, select:focus {
   color: var(--text, #ddd);
   font-size: 0.88rem;
 }
+
+/* Admin: Konsolidierte Einstellungs-Seite (Accordion-Sections) */
+.settings-page { display: flex; flex-direction: column; gap: 10px; max-width: 920px; }
+.settings-section {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  overflow: hidden;
+}
+.settings-section[open] { background: rgba(255,255,255,0.025); }
+.settings-section-title {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent, #fbbf24);
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-section-title::-webkit-details-marker { display: none; }
+.settings-section-title::before {
+  content: '▶';
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--text-muted, #777);
+  transition: transform 120ms ease;
+}
+.settings-section[open] > .settings-section-title::before { transform: rotate(90deg); }
+.settings-section-body { padding: 8px 16px 18px; border-top: 1px solid rgba(255,255,255,0.05); }
+.settings-section-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted, #888);
+  margin: 4px 0 12px;
+  line-height: 1.5;
+}
+.settings-section-hint code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; font-size: 0.8rem; }
+.settings-row-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+.settings-help-box {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.2);
+  border-left: 2px solid var(--accent, #fbbf24);
+  border-radius: 0 4px 4px 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.settings-help-box ul { margin: 6px 0 0 16px; padding: 0; }
+.settings-help-box code { background: rgba(0,0,0,0.4); padding: 1px 6px; border-radius: 3px; }
+.settings-save-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.6) 30%);
+  border-radius: 0 0 6px 6px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  z-index: 5;
+}
 .setting-item {
   display: flex;
   align-items: center;

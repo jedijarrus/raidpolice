@@ -675,7 +675,7 @@ async function handleRequest(req, res) {
       let reportCode = (body.reportCode || '').trim();
       // Fallback: neuester Report aus dem Cache
       if (!reportCode) {
-        const row = cache.getDb().prepare('SELECT report_code FROM report_data ORDER BY json_extract(meta_json, "$.start") DESC LIMIT 1').get();
+        const row = cache.getDb().prepare(`SELECT report_code FROM report_data ORDER BY json_extract(meta_json, '$.start') DESC LIMIT 1`).get();
         reportCode = row ? row.report_code : null;
       }
       if (!reportCode) { res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Keine Reports im Cache' })); return; }
@@ -725,7 +725,7 @@ async function handleRequest(req, res) {
   if (parsed.pathname === '/api/admin/sim/recent-reports' && req.method === 'GET') {
     if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
     try {
-      const rows = cache.getDb().prepare('SELECT report_code, meta_json FROM report_data ORDER BY json_extract(meta_json, "$.start") DESC LIMIT 20').all();
+      const rows = cache.getDb().prepare(`SELECT report_code, meta_json FROM report_data ORDER BY json_extract(meta_json, '$.start') DESC LIMIT 20`).all();
       const out = rows.map(r => {
         const m = JSON.parse(r.meta_json || '{}');
         return { code: r.report_code, title: m.title, start: m.start, zone: m.zone };

@@ -467,9 +467,15 @@
     $$('.dash-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => activateDashTab(btn.dataset.dtab));
     });
-    // Hash tab activation is deferred until after loadGuild() completes (skip #admin, handled by handleHash)
+    // Hash tab activation is deferred until after loadGuild() completes
+    // (skip #admin, #admin/..., #report/..., #player/... — andere Handler)
     const _hash = location.hash.replace('#', '');
-    _pendingHashTab = _hash === 'admin' ? '' : _hash;
+    if (_hash.startsWith('admin') || _hash.startsWith('report/') || _hash.startsWith('player/')) {
+      _pendingHashTab = '';
+    } else {
+      // Sanitize: nur einfache Tab-IDs (Buchstaben/Digits/Bindestrich), nichts mit Slash
+      _pendingHashTab = /^[a-zA-Z0-9_-]+$/.test(_hash) ? _hash : '';
+    }
 
     // Settings gear dropdown
     const gearBtn = $('#btn-settings-gear');

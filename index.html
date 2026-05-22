@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <title>Raidpolice</title>
-  <link rel="stylesheet" href="css/style.css?v=101">
+  <link rel="stylesheet" href="css/style.css?v=102">
 </head>
 <body class="dark-mode">
 
@@ -262,15 +262,13 @@
       </div>
       <nav class="admin-tabs">
         <button class="admin-tab-btn active" data-admin-tab="admin-tab-reports">Reports</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-general">Allgemein</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-schedule">Raid-Schedule</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-eggs">Easter Eggs</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-settings">Einstellungen</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-roster">Spieler &amp; Roster</button>
         <button class="admin-tab-btn" data-admin-tab="admin-tab-penalties">Strafen</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-roster">Roster</button>
-        <button class="admin-tab-btn" data-admin-tab="admin-tab-consumes">Consumes</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-consumes">Consumes / Edikt</button>
         <button class="admin-tab-btn" data-admin-tab="admin-tab-tracking">Tracking</button>
-        <button class="admin-tab-btn admin-superadmin-only" data-admin-tab="admin-tab-users">Benutzer</button>
         <button class="admin-tab-btn" data-admin-tab="admin-tab-actions">Aktionen</button>
+        <button class="admin-tab-btn admin-superadmin-only" data-admin-tab="admin-tab-users">Benutzer</button>
         <button class="admin-tab-btn" data-admin-tab="admin-tab-changelog">Changelog</button>
       </nav>
       <div id="admin-tab-reports" class="admin-tab-panel active">
@@ -278,68 +276,92 @@
         <div id="admin-reports-list" class="admin-reports-list"></div>
       </div>
 
-      <!-- ── Allgemein: Branding, Guild, Server, TMB, Faction ── -->
-      <div id="admin-tab-general" class="admin-tab-panel">
-        <h3 class="section-title">Branding</h3>
-        <div class="settings-grid">
-          <label class="setting-row"><span>App-Name:</span><input type="text" id="set-appName" placeholder="Raidpolice" maxlength="40"></label>
-          <label class="setting-row"><span>Gildenname:</span><input type="text" id="set-guildName" placeholder="z.B. Plague" maxlength="40"></label>
-          <label class="setting-row"><span>Server:</span><input type="text" id="set-serverName" placeholder="z.B. Thunderstrike" maxlength="40"></label>
-          <label class="setting-row"><span>Region:</span><input type="text" id="set-region" placeholder="z.B. EU" maxlength="10"></label>
-          <label class="setting-row"><span>Fraktion:</span>
-            <select id="set-faction"><option value="">—</option><option value="Alliance">Alliance</option><option value="Horde">Horde</option></select>
-          </label>
-        </div>
-        <h3 class="section-title" style="margin-top:24px">ThatsMyBis Integration</h3>
-        <div class="settings-grid">
-          <label class="setting-row"><span>Guild-ID:</span><input type="text" id="set-tmbGuildId" placeholder="z.B. 23865" maxlength="20"></label>
-          <label class="setting-row"><span>Guild-Slug:</span><input type="text" id="set-tmbGuildSlug" placeholder="z.B. plague" maxlength="40"></label>
-          <label class="setting-row"><span>TMB-Cookie:</span><input type="password" id="set-tmbCookie" placeholder="laravel_session=..." autocomplete="new-password"></label>
-        </div>
-        <h3 class="section-title" style="margin-top:24px">Content-Klassifikation</h3>
-        <p class="text-muted" style="margin-bottom:12px">Welche Raid-Zones sind „Current Content" und welche „Legacy"? Beeinflusst die Progression-Bewertung.</p>
-        <div id="zone-classification"></div>
-        <div style="margin-top:18px"><button id="btn-save-general" class="btn btn-primary">Speichern</button><span id="general-save-msg" class="text-muted" style="margin-left:12px"></span></div>
-      </div>
+      <!-- ── Einstellungen: Allgemein, Schedule, Easter Eggs, Zone-Klassifikation ── -->
+      <div id="admin-tab-settings" class="admin-tab-panel">
+        <div class="settings-page">
 
-      <!-- ── Raid-Schedule: Tage + Zeiten ── -->
-      <div id="admin-tab-schedule" class="admin-tab-panel">
-        <h3 class="section-title">Raid-Schedule</h3>
-        <p class="text-muted" style="margin-bottom:12px">Welche Tage + Zeiten werden geraidet? Live-Ticker nutzt das fürs Polling-Fenster.</p>
-        <table class="results-table" id="schedule-table">
-          <thead><tr><th>Tag</th><th>Startzeit (HH:MM)</th><th>Raid-Größe</th><th>Track</th><th></th></tr></thead>
-          <tbody id="schedule-body"></tbody>
-        </table>
-        <div style="margin-top:12px">
-          <button id="btn-schedule-add" class="btn btn-sm">+ Hinzufügen</button>
-          <button id="btn-schedule-save" class="btn btn-sm btn-primary" style="margin-left:8px">Speichern</button>
-          <span id="schedule-save-msg" class="text-muted" style="margin-left:12px"></span>
-        </div>
-      </div>
+          <details class="settings-section" open>
+            <summary class="settings-section-title">Branding &amp; Gilde</summary>
+            <div class="settings-section-body">
+              <div class="settings-grid">
+                <label class="setting-row"><span>App-Name</span><input type="text" id="set-appName" placeholder="Raidpolice" maxlength="40"></label>
+                <label class="setting-row"><span>Gildenname</span><input type="text" id="set-guildName" placeholder="z.B. Plague" maxlength="40"></label>
+                <label class="setting-row"><span>Server</span><input type="text" id="set-serverName" placeholder="z.B. Thunderstrike" maxlength="40"></label>
+                <label class="setting-row"><span>Region</span><input type="text" id="set-region" placeholder="z.B. EU" maxlength="10"></label>
+                <label class="setting-row"><span>Fraktion</span>
+                  <select id="set-faction"><option value="">—</option><option value="Alliance">Alliance</option><option value="Horde">Horde</option></select>
+                </label>
+              </div>
+            </div>
+          </details>
 
-      <!-- ── Easter Eggs ── -->
-      <div id="admin-tab-eggs" class="admin-tab-panel">
-        <h3 class="section-title">Easter Eggs</h3>
-        <p class="text-muted" style="margin-bottom:12px">Spieler-spezifische Animationen beim Hover über den Namen.</p>
-        <table class="results-table" id="eggs-table">
-          <thead><tr><th>Spielername</th><th>Type</th><th>Alt-Text / Popup-Text</th><th></th></tr></thead>
-          <tbody id="eggs-body"></tbody>
-        </table>
-        <div style="margin-top:12px">
-          <button id="btn-eggs-add" class="btn btn-sm">+ Hinzufügen</button>
-          <button id="btn-eggs-save" class="btn btn-sm btn-primary" style="margin-left:8px">Speichern</button>
-          <span id="eggs-save-msg" class="text-muted" style="margin-left:12px"></span>
-        </div>
-        <div style="margin-top:18px;padding:12px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:0.85rem">
-          <strong>Type-Übersicht:</strong>
-          <ul style="margin:8px 0 0 16px;padding:0;line-height:1.7">
-            <li><code>wobble</code> — Hover swappt Name auf Alt-Text</li>
-            <li><code>popup</code> — Hover zeigt Popup-Text neben dem Namen</li>
-            <li><code>girly</code> — Aktiviert „Girly-Mode" auf der Seite</li>
-            <li><code>letterswap</code> — i↔a tauschen (fix codiert für Nisali-style)</li>
-            <li><code>slacker-wobble</code> — Wobble mit Schlaf-Animation</li>
-            <li><code>tank-death-wobble</code> — Großes wackelndes Alt-Wort bei Tank-Tod</li>
-          </ul>
+          <details class="settings-section">
+            <summary class="settings-section-title">ThatsMyBis Integration</summary>
+            <div class="settings-section-body">
+              <p class="settings-section-hint">Die Guild-ID + Slug stehen in der TMB-URL: <code>thatsmybis.com/{id}/{slug}/…</code>. Cookie aus deinem Browser ziehen (laravel_session).</p>
+              <div class="settings-grid">
+                <label class="setting-row"><span>Guild-ID</span><input type="text" id="set-tmbGuildId" placeholder="z.B. 23865" maxlength="20"></label>
+                <label class="setting-row"><span>Guild-Slug</span><input type="text" id="set-tmbGuildSlug" placeholder="z.B. plague" maxlength="40"></label>
+                <label class="setting-row"><span>TMB-Cookie</span><input type="password" id="set-tmbCookie" placeholder="laravel_session=..." autocomplete="new-password"></label>
+              </div>
+            </div>
+          </details>
+
+          <details class="settings-section">
+            <summary class="settings-section-title">Raid-Schedule</summary>
+            <div class="settings-section-body">
+              <p class="settings-section-hint">Tage + Zeiten + Raid-Größe. Live-Ticker pollt automatisch in diesen Zeitfenstern.</p>
+              <table class="results-table" id="schedule-table">
+                <thead><tr><th>Tag</th><th>Startzeit</th><th>Größe</th><th>Track</th><th></th></tr></thead>
+                <tbody id="schedule-body"></tbody>
+              </table>
+              <div class="settings-row-actions">
+                <button id="btn-schedule-add" class="btn btn-sm">+ Hinzufügen</button>
+                <button id="btn-schedule-save" class="btn btn-sm btn-primary">Schedule speichern</button>
+                <span id="schedule-save-msg" class="text-muted"></span>
+              </div>
+            </div>
+          </details>
+
+          <details class="settings-section">
+            <summary class="settings-section-title">Content-Klassifikation</summary>
+            <div class="settings-section-body">
+              <p class="settings-section-hint">Pro Zone: Current oder Legacy. „Auto" wählt anhand Tier (T5+ = current).</p>
+              <div id="zone-classification"></div>
+            </div>
+          </details>
+
+          <details class="settings-section">
+            <summary class="settings-section-title">Easter Eggs</summary>
+            <div class="settings-section-body">
+              <p class="settings-section-hint">Spieler-spezifische Animationen beim Hover über den Namen.</p>
+              <table class="results-table" id="eggs-table">
+                <thead><tr><th>Spielername</th><th>Type</th><th>Alt-Text / Popup-Text</th><th></th></tr></thead>
+                <tbody id="eggs-body"></tbody>
+              </table>
+              <div class="settings-row-actions">
+                <button id="btn-eggs-add" class="btn btn-sm">+ Hinzufügen</button>
+                <button id="btn-eggs-save" class="btn btn-sm btn-primary">Eggs speichern</button>
+                <span id="eggs-save-msg" class="text-muted"></span>
+              </div>
+              <div class="settings-help-box">
+                <strong>Type-Übersicht:</strong>
+                <ul>
+                  <li><code>wobble</code> — Hover swappt Name auf Alt-Text</li>
+                  <li><code>popup</code> — Hover zeigt Popup-Text neben dem Namen</li>
+                  <li><code>girly</code> — Aktiviert „Girly-Mode" auf der Seite</li>
+                  <li><code>letterswap</code> — i↔a tauschen (fix codiert)</li>
+                  <li><code>slacker-wobble</code> — Wobble mit Schlaf-Animation</li>
+                  <li><code>tank-death-wobble</code> — Großes wackelndes Alt-Wort bei Tank-Tod</li>
+                </ul>
+              </div>
+            </div>
+          </details>
+
+          <div class="settings-save-bar">
+            <button id="btn-save-general" class="btn btn-primary">Allgemein + Klassifikation speichern</button>
+            <span id="general-save-msg" class="text-muted"></span>
+          </div>
         </div>
       </div>
       <div id="admin-tab-penalties" class="admin-tab-panel">
@@ -851,6 +873,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=149"></script>
+  <script src="js/app.js?v=150"></script>
 </body>
 </html>
