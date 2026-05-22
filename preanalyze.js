@@ -2916,7 +2916,8 @@ async function processReport(reportCode) {
   // these while the raid was still in progress, later runs must invalidate and
   // recompute — otherwise cached analyses stay frozen on a subset of fights.
   const PER_FIGHT_TYPES = ['gear', 'buffs', 'consumables', 'spellranks',
-                           'deaths', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes'];
+                           'deaths', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes',
+                           'trinkets', 'cooldowns'];
 
   // Check for report growth before anything else (live logging / in-progress raid)
   let reportDataPrefetched = null;
