@@ -4322,8 +4322,14 @@
       $('#set-faction').value = s.faction || '';
       $('#set-tmbGuildId').value = s.tmbGuildId || '';
       $('#set-tmbGuildSlug').value = s.tmbGuildSlug || '';
-      $('#set-tmbCookie').value = '';
-      $('#set-tmbCookie').placeholder = s.tmbCookie ? '(gesetzt — leerlassen um zu behalten)' : 'laravel_session=...';
+      // Secrets: nie zurückgegeben, nur „_set" Indikator. Felder bleiben leer.
+      for (const k of ['apiKey', 'wclV2ClientId', 'wclV2ClientSecret', 'tmbCookie']) {
+        const el = document.getElementById(`set-${k}`);
+        if (el) {
+          el.value = '';
+          el.placeholder = s[`${k}_set`] ? '(gesetzt — leerlassen um zu behalten)' : (k === 'tmbCookie' ? 'laravel_session=...' : '');
+        }
+      }
       try { currentZones = JSON.parse(s.currentZones || '[]').map(Number); } catch (_) {}
       try { legacyZones = JSON.parse(s.legacyZones || '[]').map(Number); } catch (_) {}
     } catch (_) {}
@@ -4343,8 +4349,11 @@
           currentZones: JSON.stringify(collectZoneClassification('current')),
           legacyZones: JSON.stringify(collectZoneClassification('legacy')),
         };
-        const tmbC = $('#set-tmbCookie').value.trim();
-        if (tmbC) body.tmbCookie = tmbC;
+        // Secrets nur senden wenn explizit was eingetragen wurde
+        for (const k of ['apiKey', 'wclV2ClientId', 'wclV2ClientSecret', 'tmbCookie']) {
+          const v = (document.getElementById(`set-${k}`)?.value || '').trim();
+          if (v) body[k] = v;
+        }
         const msg = $('#general-save-msg');
         try {
           await apiFetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

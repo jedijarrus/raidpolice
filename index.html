@@ -296,13 +296,48 @@
           </details>
 
           <details class="settings-section">
-            <summary class="settings-section-title">ThatsMyBis Integration</summary>
+            <summary class="settings-section-title">API-Credentials &amp; Secrets</summary>
             <div class="settings-section-body">
-              <p class="settings-section-hint">Die Guild-ID + Slug stehen in der TMB-URL: <code>thatsmybis.com/{id}/{slug}/…</code>. Cookie aus deinem Browser ziehen (laravel_session).</p>
+              <p class="settings-section-hint">Hier liegen die Tokens für WCL und TMB. Werte werden niemals an den Client zurückgegeben — Feld leerlassen behält den gespeicherten Wert; Wert eintragen überschreibt ihn.</p>
+
+              <h4 style="margin:10px 0 8px;color:#fbbf24;font-size:0.9rem">Warcraft Logs API v1 (Public Key)</h4>
+              <p class="settings-section-hint">Wo: <a href="https://www.warcraftlogs.com/profile" target="_blank" rel="noreferrer">warcraftlogs.com/profile</a> → ganz unten „Web API → Public Key". Limit 600 req/h pro IP.</p>
+              <div class="settings-grid">
+                <label class="setting-row"><span>v1 API-Key</span><input type="password" id="set-apiKey" placeholder="(leer = behalten)" autocomplete="new-password"></label>
+              </div>
+
+              <h4 style="margin:18px 0 8px;color:#fbbf24;font-size:0.9rem">Warcraft Logs API v2 (OAuth Client)</h4>
+              <p class="settings-section-hint">Wo: <a href="https://www.warcraftlogs.com/api/clients/" target="_blank" rel="noreferrer">warcraftlogs.com/api/clients/</a> → „Create Client" (Name beliebig, Redirect kann leer bleiben). Limit 9000 Punkte/h. Wird für Cast-Events benötigt.</p>
+              <div class="settings-grid">
+                <label class="setting-row"><span>v2 Client-ID</span><input type="password" id="set-wclV2ClientId" placeholder="(leer = behalten)" autocomplete="new-password"></label>
+                <label class="setting-row"><span>v2 Client-Secret</span><input type="password" id="set-wclV2ClientSecret" placeholder="(leer = behalten)" autocomplete="new-password"></label>
+              </div>
+
+              <h4 style="margin:18px 0 8px;color:#fbbf24;font-size:0.9rem">ThatsMyBis Cookie</h4>
+              <details style="margin:6px 0 12px;padding:10px 12px;background:rgba(0,0,0,0.25);border-radius:4px;font-size:0.84rem">
+                <summary style="cursor:pointer;color:#fbbf24">Wie extrahiert man den TMB-Cookie? ▾</summary>
+                <ol style="margin:10px 0 0 18px;line-height:1.7;color:#ccc">
+                  <li>Browser öffnen, bei <a href="https://thatsmybis.com" target="_blank" rel="noreferrer">thatsmybis.com</a> einloggen.</li>
+                  <li>DevTools öffnen (F12 oder Rechtsklick → „Untersuchen").</li>
+                  <li>Reiter „Application" (Chrome/Edge) bzw. „Speicher" (Firefox) → links unter „Cookies" → <code>https://thatsmybis.com</code> auswählen.</li>
+                  <li>Den Eintrag <code>laravel_session</code> finden — den Wert kopieren (lange Zeichenkette).</li>
+                  <li>Hier unten eintragen, im Format <code>laravel_session=DER_WERT</code> (das Prefix ist wichtig).</li>
+                </ol>
+                <p style="margin:10px 0 0;color:#888">Der Cookie läuft nach einigen Wochen ab — wenn TMB-Daten 401/403 zurückgeben, hier neu setzen.</p>
+              </details>
+              <div class="settings-grid">
+                <label class="setting-row"><span>TMB-Cookie</span><input type="password" id="set-tmbCookie" placeholder="laravel_session=..." autocomplete="new-password"></label>
+              </div>
+            </div>
+          </details>
+
+          <details class="settings-section">
+            <summary class="settings-section-title">ThatsMyBis Guild</summary>
+            <div class="settings-section-body">
+              <p class="settings-section-hint">Die Guild-ID + Slug stehen in der TMB-URL nach dem Login: <code>thatsmybis.com/{id}/{slug}/…</code> — z.B. <code>thatsmybis.com/23865/plague/dashboard</code> → Guild-ID <code>23865</code>, Slug <code>plague</code>.</p>
               <div class="settings-grid">
                 <label class="setting-row"><span>Guild-ID</span><input type="text" id="set-tmbGuildId" placeholder="z.B. 23865" maxlength="20"></label>
                 <label class="setting-row"><span>Guild-Slug</span><input type="text" id="set-tmbGuildSlug" placeholder="z.B. plague" maxlength="40"></label>
-                <label class="setting-row"><span>TMB-Cookie</span><input type="password" id="set-tmbCookie" placeholder="laravel_session=..." autocomplete="new-password"></label>
               </div>
             </div>
           </details>
@@ -915,6 +950,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=151"></script>
+  <script src="js/app.js?v=152"></script>
 </body>
 </html>

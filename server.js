@@ -485,19 +485,23 @@ async function handleRequest(req, res) {
       'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones', 'ediktTexts',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
+    // Secrets — separat behandelt (gemaskt zurückgegeben, niemals im Klartext)
+    const SECRET_KEYS = ['apiKey', 'wclV2ClientId', 'wclV2ClientSecret', 'tmbCookie'];
     const safe = {};
     for (const k of SAFE_KEYS) {
       if (all[k] !== undefined) safe[k] = all[k];
     }
-    // Indicate if API key is stored without revealing it
-    if (all.apiKey) safe.apiKey = '••••' + all.apiKey.slice(-4);
+    // Secrets: nur „gesetzt"-Indikator, niemals den Wert
+    for (const k of SECRET_KEYS) {
+      if (all[k]) safe[`${k}_set`] = true;
+    }
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
     res.end(JSON.stringify(safe));
     return;
   }
 
   if (parsed.pathname === '/api/settings' && req.method === 'POST') {
-    const ALLOWED_SETTINGS = ['apiKey', 'guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug', 'tmbCookie',
+    const ALLOWED_SETTINGS = ['apiKey', 'wclV2ClientId', 'wclV2ClientSecret', 'guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug', 'tmbCookie',
       'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones', 'ediktTexts',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
