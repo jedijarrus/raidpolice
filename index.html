@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Plague Stasi</title>
+  <link rel="stylesheet" href="css/style.css?v=100">
+</head>
+<body class="dark-mode">
+
+  <!-- ─── TOP BAR ─── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="logo" id="btn-home">Plague Stasi</h1>
+    </div>
+    <div class="topbar-right">
+      <span id="cache-indicator" class="cache-badge hidden"></span>
+      <div class="settings-dropdown-wrapper">
+        <a href="#bugs" class="btn-icon" title="Bug Tracker" id="btn-bugs-link" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3.003 3.003 0 116 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 014-4h4a4 4 0 014 4v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M6 17l-4 1M17.47 9c1.93-.2 3.53-1.9 3.53-4M18 13h4M18 17l4 1"/></svg></a>
+      <a href="#admin" class="btn-icon" title="Admin" id="btn-admin-link">&#128274;</a>
+      <button id="btn-settings-gear" class="btn-icon" title="Rahmenbedingungen">&#9881;</button>
+        <div id="settings-dropdown" class="settings-dropdown hidden">
+          <div class="settings-dropdown-title">Rahmenbedingungen</div>
+          <label class="setting-item">
+            <input type="checkbox" id="ds-setting-vanilla-enchants"> Vanilla Enchants erlaubt
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="ds-setting-rare-gems"> Rare Gems Pflicht
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="ds-setting-epic-gems"> Epic Gems Pflicht
+          </label>
+        </div>
+      </div>
+      <button id="theme-toggle" class="btn-icon" title="Theme wechseln">&#9728;&#65039;</button>
+    </div>
+  </header>
+
+  <!-- ─── VIEW: GUILD DASHBOARD ─── -->
+  <section id="view-dashboard" class="view active">
+    <div class="dashboard-header">
+      <div>
+        <h2 id="guild-title"></h2>
+        <p id="guild-subtitle" class="text-muted"></p>
+      </div>
+      <div class="dashboard-actions">
+        <button id="btn-refresh-guild" class="btn btn-sm">&#x21BB; Aktualisieren</button>
+      </div>
+    </div>
+
+    <!-- Dashboard Tabs -->
+    <nav class="dash-tab-nav">
+      <button class="dash-tab-btn active" data-dtab="dtab-raids">Raids</button>
+      <button class="dash-tab-btn" data-dtab="dtab-live" id="btn-tab-live">
+        <span id="live-dot-tab" class="live-dot-tab hidden"></span>
+        Live
+      </button>
+      <button class="dash-tab-btn" data-dtab="dtab-progression">Spieler-Entwicklung</button>
+      <button class="dash-tab-btn" data-dtab="dtab-stats">Statistik</button>
+      <button class="dash-tab-btn" data-dtab="dtab-edikt">📜 Edikt</button>
+    </nav>
+
+    <!-- Raids Tab -->
+    <div id="dtab-raids" class="dash-tab-panel active">
+      <div class="raid-days-row">
+        <!-- 25-Man Donnerstag -->
+        <div class="raid-card">
+          <div class="raid-card-header">
+            <span class="raid-card-icon">&#9876;</span>
+            <span>25-Man — Donnerstag</span>
+          </div>
+          <div class="raid-card-body">
+            <div id="reports-25-thu"></div>
+            <p id="no-reports-25-thu" class="text-muted hidden">Keine Donnerstag-Reports gefunden.</p>
+          </div>
+        </div>
+
+        <!-- 25-Man Dienstag -->
+        <div class="raid-card">
+          <div class="raid-card-header">
+            <span class="raid-card-icon">&#9876;</span>
+            <span>25-Man — Dienstag</span>
+          </div>
+          <div class="raid-card-body">
+            <div id="reports-25-tue"></div>
+            <p id="no-reports-25-tue" class="text-muted hidden">Keine Dienstag-Reports gefunden.</p>
+          </div>
+        </div>
+
+        <!-- 25-Man Montag (Altcontent) -->
+        <div class="raid-card">
+          <div class="raid-card-header">
+            <span class="raid-card-icon">&#9876;</span>
+            <span>25-Man — Montag</span>
+          </div>
+          <div class="raid-card-body">
+            <div id="reports-25-mon"></div>
+            <p id="no-reports-25-mon" class="text-muted hidden">Keine Montag-Reports gefunden.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10-Man Section -->
+      <div class="raid-card" style="margin-top: 24px;">
+        <div class="raid-card-header">
+          <span class="raid-card-icon">&#9876;</span>
+          <span>10-Man Raids</span>
+        </div>
+        <div class="raid-card-body">
+          <div id="reports-10"></div>
+          <p id="no-reports-10" class="text-muted hidden">Keine 10er Reports gefunden.</p>
+        </div>
+      </div>
+
+      <!-- Unknown zone -->
+      <div id="section-other" class="raid-card hidden" style="margin-top: 24px;">
+        <div class="raid-card-header">
+          <span class="raid-card-icon">&#9876;</span>
+          <span>Sonstige</span>
+        </div>
+        <div class="raid-card-body">
+          <div id="reports-other"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Tab -->
+    <div id="dtab-live" class="dash-tab-panel">
+      <div class="raid-section">
+        <div class="live-filters">
+          <label class="inline-check"><input type="checkbox" id="live-hide-healer-downranks" checked> Healer-Downranks ausblenden</label>
+        </div>
+        <div id="live-ticker" class="live-ticker">
+          <div id="live-ticker-content">
+            <p class="text-muted">Kein Live-Raid erkannt. Der Ticker sucht Di/Do ab 19:30 automatisch nach aktiven 25-Man Raids.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spieler-Entwicklung Tab -->
+    <div id="dtab-progression" class="dash-tab-panel">
+      <div class="raid-section">
+        <h3 class="section-title">Spieler-Entwicklung (25-Man)</h3>
+        <div class="progression-track-toggle" style="display:flex;gap:6px;margin-bottom:10px">
+          <button id="btn-prog-track-current" class="btn btn-sm btn-primary" data-track="current">Aktueller Content</button>
+          <button id="btn-prog-track-legacy" class="btn btn-sm" data-track="legacy">Altcontent</button>
+        </div>
+        <div class="progression-filters">
+          <label class="inline-check"><input type="checkbox" id="prog-show-mon" checked> <span class="day-label-mon">Mo</span></label>
+          <label class="inline-check"><input type="checkbox" id="prog-show-tue" checked> <span class="day-label-tue">Di</span></label>
+          <label class="inline-check"><input type="checkbox" id="prog-show-thu" checked> <span class="day-label-thu">Do</span></label>
+          <label class="inline-check"><input type="checkbox" id="prog-merge-alts"> Charaktere zusammenfassen</label>
+          <label class="inline-check"><input type="checkbox" id="prog-show-offspec"> Offspec-Gear</label>
+        </div>
+        <div id="progression-status" class="status-bar hidden"></div>
+        <div id="progression-results"></div>
+      </div>
+    </div>
+
+    <!-- Statistik Tab -->
+    <div id="dtab-stats" class="dash-tab-panel">
+      <div class="raid-section">
+        <h3 class="section-title">Raid-Statistiken (25-Man)</h3>
+        <div id="stats-status" class="status-bar hidden"></div>
+        <div id="stats-results"><p class="text-muted">Statistiken werden beim Oeffnen geladen...</p></div>
+      </div>
+    </div>
+
+    <!-- Edikt Tab (Consumable Policy, öffentlich) -->
+    <div id="dtab-edikt" class="dash-tab-panel">
+      <div id="edikt-content"><p class="text-muted">Wird geladen...</p></div>
+    </div>
+  </section>
+
+  <!-- ─── VIEW: REPORT ANALYSIS ─── -->
+  <section id="view-analysis" class="view">
+    <div class="analysis-header">
+      <button id="btn-back-dashboard" class="btn btn-sm">&larr; Zurueck</button>
+      <div id="report-info" class="report-info-bar"></div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="tab-fights">Fights</button>
+      <button class="tab-btn" data-tab="tab-buffs">Buffs</button>
+      <button class="tab-btn" data-tab="tab-consumables">Consumables</button>
+      <button class="tab-btn" data-tab="tab-gear">Gear</button>
+      <button class="tab-btn" data-tab="tab-spellranks">Spell Ranks</button>
+      <button class="tab-btn" data-tab="tab-avoidable">Avoidable Damage</button>
+      <button class="tab-btn" data-tab="tab-trinkets">🛡 Trinkets</button>
+      <button class="tab-btn" data-tab="tab-cooldowns">⚡ CDs</button>
+      <button class="tab-btn" data-tab="tab-wipes">📊 Analyse</button>
+      <!--<button class="tab-btn" data-tab="tab-drums">Drums</button>-->
+      <!--<button class="tab-btn" data-tab="tab-sr">Shadow Resistance</button>-->
+    </nav>
+
+    <!-- Tab Panels -->
+    <div class="tab-panels">
+      <!-- Fights -->
+      <div id="tab-fights" class="tab-panel active">
+        <div id="fights-results"></div>
+      </div>
+
+      <!-- Buffs -->
+      <div id="tab-buffs" class="tab-panel">
+        <div id="buffs-status" class="status-bar hidden"></div>
+        <div id="buffs-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Consumables -->
+      <div id="tab-consumables" class="tab-panel">
+        <div id="consumables-status" class="status-bar hidden"></div>
+        <div id="consumables-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Gear -->
+      <div id="tab-gear" class="tab-panel">
+        <div class="panel-actions">
+          <select id="gear-fight-select" class="select-fight"></select>
+          <label class="inline-check"><input type="checkbox" id="gear-show-all"> Alle Spieler</label>
+          <label class="inline-check"><input type="checkbox" id="gear-hide-offspec" checked> Offspec ausblenden</label>
+        </div>
+        <div id="gear-status" class="status-bar hidden"></div>
+        <div id="gear-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Spell Ranks -->
+      <div id="tab-spellranks" class="tab-panel">
+        <div class="panel-actions">
+          <select id="spellranks-fight-select" class="select-fight"></select>
+          <label class="inline-check"><input type="checkbox" id="spellranks-hide-healers" checked> Healer-Downranks ausblenden</label>
+        </div>
+        <div id="spellranks-status" class="status-bar hidden"></div>
+        <div id="spellranks-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Avoidable Damage -->
+      <div id="tab-avoidable" class="tab-panel">
+        <div class="panel-actions">
+          <select id="avoidable-fight-select" class="select-fight"></select>
+        </div>
+        <div id="avoidable-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Trinket Usage -->
+      <div id="tab-trinkets" class="tab-panel">
+        <div id="trinkets-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Cooldown Usage -->
+      <div id="tab-cooldowns" class="tab-panel">
+        <div id="cooldowns-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Analyse (Kills + Wipes) -->
+      <div id="tab-wipes" class="tab-panel">
+        <div id="wipes-results"><p class="text-muted auto-loading">Wird geladen...</p></div>
+      </div>
+
+      <!-- Drums -->
+      <div id="tab-drums" class="tab-panel">
+        <div class="panel-actions">
+          <button id="btn-run-drums" class="btn btn-primary">Drums analysieren</button>
+        </div>
+        <div id="drums-status" class="status-bar hidden"></div>
+        <div id="drums-results"></div>
+      </div>
+
+      <!-- Shadow Resistance -->
+      <div id="tab-sr" class="tab-panel">
+        <div class="panel-actions">
+          <select id="sr-fight-select" class="select-fight"></select>
+          <button id="btn-run-sr" class="btn btn-primary">SR analysieren</button>
+        </div>
+        <div id="sr-status" class="status-bar hidden"></div>
+        <div id="sr-results"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── VIEW: ADMIN ─── -->
+  <section id="view-admin" class="view">
+    <div class="admin-header">
+      <button id="btn-admin-back" class="btn btn-sm">&larr; Zurueck</button>
+      <h2>Reports verwalten</h2>
+      <button id="btn-admin-refresh-all" class="btn btn-sm btn-secondary" style="margin-left:auto">&#x21BB; Alles neu laden</button>
+    </div>
+    <div id="admin-login" class="admin-login-panel">
+      <label>Benutzername</label>
+      <input type="text" id="admin-username" class="input" placeholder="Benutzername" autocomplete="username">
+      <label>Passwort</label>
+      <input type="password" id="admin-password" class="input" placeholder="Passwort" autocomplete="current-password">
+      <button id="btn-admin-login" class="btn btn-primary btn-sm">Anmelden</button>
+      <p id="admin-login-error" class="text-error hidden">Falscher Benutzername oder Passwort.</p>
+    </div>
+    <div id="admin-reports" class="hidden">
+      <div class="admin-user-bar">
+        <span>Eingeloggt als <strong id="admin-current-user"></strong> <span id="admin-current-role" class="admin-role-badge"></span></span>
+        <button id="btn-admin-change-pw" class="btn btn-sm">Passwort aendern</button>
+        <button id="btn-admin-logout" class="btn btn-sm">Abmelden</button>
+      </div>
+      <div id="admin-change-pw-panel" class="admin-change-pw hidden">
+        <input type="password" id="admin-old-pw" class="input" placeholder="Altes Passwort" autocomplete="current-password">
+        <input type="password" id="admin-new-pw" class="input" placeholder="Neues Passwort (min. 6 Zeichen)" autocomplete="new-password">
+        <input type="password" id="admin-new-pw2" class="input" placeholder="Neues Passwort wiederholen" autocomplete="new-password">
+        <button id="btn-admin-save-pw" class="btn btn-primary btn-sm">Speichern</button>
+        <span id="admin-pw-msg" class="hidden"></span>
+      </div>
+      <nav class="admin-tabs">
+        <button class="admin-tab-btn active" data-admin-tab="admin-tab-reports">Reports</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-penalties">Strafen</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-roster">Roster</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-consumes">Consumes</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-tracking">Tracking</button>
+        <button class="admin-tab-btn admin-superadmin-only" data-admin-tab="admin-tab-users">Benutzer</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-actions">Aktionen</button>
+        <button class="admin-tab-btn" data-admin-tab="admin-tab-changelog">Changelog</button>
+      </nav>
+      <div id="admin-tab-reports" class="admin-tab-panel active">
+        <div id="admin-status" class="status-bar hidden"></div>
+        <div id="admin-reports-list" class="admin-reports-list"></div>
+      </div>
+      <div id="admin-tab-penalties" class="admin-tab-panel">
+        <div class="penalty-grid">
+
+          <!-- Card 1: Attendance-Strafen -->
+          <div class="penalty-card penalty-card--danger">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#9888;</div>
+              <div>
+                <h3 class="penalty-card__title">Attendance-Strafen</h3>
+                <p class="penalty-card__desc">Prozentpunkte pauschal von der Attendance abziehen.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field">
+                <label class="penalty-label">Spieler</label>
+                <div class="autocomplete-wrap"><input type="text" id="penalty-player" class="penalty-input" placeholder="Name eingeben..." autocomplete="off"><div class="autocomplete-list hidden" id="penalty-player-ac"></div></div>
+              </div>
+              <div class="penalty-field penalty-field--small">
+                <label class="penalty-label">Strafe</label>
+                <input type="number" id="penalty-pct" class="penalty-input" placeholder="%" min="0" max="100">
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Grund</label>
+                <input type="text" id="penalty-reason" class="penalty-input" placeholder="Optional...">
+              </div>
+              <button id="btn-penalty-add" class="penalty-btn penalty-btn--add">+ Hinzufuegen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-penalties-table">
+                <thead><tr><th>Spieler</th><th>Strafe</th><th>Grund</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-penalties-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Card 2: Raid aberkennen -->
+          <div class="penalty-card penalty-card--warn">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#10007;</div>
+              <div>
+                <h3 class="penalty-card__title">Raid aberkennen</h3>
+                <p class="penalty-card__desc">Spieler war anwesend, aber Raid zaehlt nicht (z.B. geslackt).</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field">
+                <label class="penalty-label">Spieler</label>
+                <div class="autocomplete-wrap"><input type="text" id="revoked-player" class="penalty-input" placeholder="Name eingeben..." autocomplete="off"><div class="autocomplete-list hidden" id="revoked-player-ac"></div></div>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Raid</label>
+                <select id="revoked-date" class="penalty-input penalty-select"><option value="">Erst Spieler waehlen...</option></select>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Grund</label>
+                <input type="text" id="revoked-reason" class="penalty-input" placeholder="Optional...">
+              </div>
+              <button id="btn-revoked-add" class="penalty-btn penalty-btn--add">+ Hinzufuegen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-revoked-table">
+                <thead><tr><th>Spieler</th><th>Raid</th><th>Grund</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-revoked-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Card 3: Spieler-Abwesenheiten -->
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#10003;</div>
+              <div>
+                <h3 class="penalty-card__title">Entschuldigte Abwesenheit</h3>
+                <p class="penalty-card__desc">Spieler war nicht da, Raid zaehlt nicht als verpasst.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field">
+                <label class="penalty-label">Spieler</label>
+                <div class="autocomplete-wrap"><input type="text" id="excused-player-name" class="penalty-input" placeholder="Name eingeben..." autocomplete="off"><div class="autocomplete-list hidden" id="excused-player-ac"></div></div>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Raid</label>
+                <select id="excused-player-date" class="penalty-input penalty-select raid-date-select"><option value="">Raid waehlen...</option></select>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Grund</label>
+                <input type="text" id="excused-player-reason" class="penalty-input" placeholder="Optional...">
+              </div>
+              <button id="btn-excused-player-add" class="penalty-btn penalty-btn--add">+ Hinzufuegen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-excused-player-table">
+                <thead><tr><th>Spieler</th><th>Raid</th><th>Grund</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-excused-player-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Card 4: Globale Raid-Ausschluesse -->
+          <div class="penalty-card penalty-card--muted">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#8709;</div>
+              <div>
+                <h3 class="penalty-card__title">Raids ausschliessen</h3>
+                <p class="penalty-card__desc">Raid zaehlt fuer niemanden in der Attendance.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Raid</label>
+                <select id="excused-date" class="penalty-input penalty-select raid-date-select-all"><option value="">Raid waehlen...</option></select>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Grund</label>
+                <input type="text" id="excused-reason" class="penalty-input" placeholder="Optional...">
+              </div>
+              <button id="btn-excused-add" class="penalty-btn penalty-btn--add">+ Hinzufuegen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-excused-table">
+                <thead><tr><th>Raid-Datum</th><th>Grund</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-excused-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Roster Tab -->
+      <div id="admin-tab-roster" class="admin-tab-panel">
+        <div class="penalty-grid">
+
+          <!-- Charaktere ausschliessen -->
+          <div class="penalty-card penalty-card--danger">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128683;</div>
+              <div>
+                <h3 class="penalty-card__title">Charaktere ausschliessen</h3>
+                <p class="penalty-card__desc">Charakter wird komplett aus der Spieler-Entwicklung ausgeblendet (z.B. Gaeste, Nicht-Gildenmitglieder).</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Spieler</label>
+                <div class="autocomplete-wrap"><input type="text" id="excluded-player-name" class="penalty-input" placeholder="Name eingeben..." autocomplete="off"><div class="autocomplete-list hidden" id="excluded-player-ac"></div></div>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Grund</label>
+                <input type="text" id="excluded-player-reason" class="penalty-input" placeholder="z.B. Gilde verlassen...">
+              </div>
+              <button id="btn-excluded-player-add" class="penalty-btn penalty-btn--add">+ Ausschliessen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-excluded-players-table">
+                <thead><tr><th>Spieler</th><th>Grund</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-excluded-players-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Spieler-Rolle -->
+          <div class="penalty-card penalty-card--muted">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#9876;</div>
+              <div>
+                <h3 class="penalty-card__title">Spieler-Rolle (Mainspec)</h3>
+                <p class="penalty-card__desc">Ueberschreibt die automatisch erkannte Rolle. Bestimmt, was als Offspec gilt (Gear, Scrolls).</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field">
+                <label class="penalty-label">Spieler</label>
+                <div class="autocomplete-wrap"><input type="text" id="playerrole-name" class="penalty-input" placeholder="Name eingeben..." autocomplete="off"><div class="autocomplete-list hidden" id="playerrole-ac"></div></div>
+              </div>
+              <div class="penalty-field">
+                <label class="penalty-label">Rolle</label>
+                <select id="playerrole-role" class="penalty-input penalty-select">
+                  <option value="tank">Tank</option>
+                  <option value="healer">Healer</option>
+                  <option value="dps">DPS</option>
+                </select>
+              </div>
+              <button id="btn-playerrole-add" class="penalty-btn penalty-btn--add">+ Festlegen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-playerroles-table">
+                <thead><tr><th>Spieler</th><th>Rolle</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-playerroles-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Einstiegszeitpunkt -->
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128197;</div>
+              <div>
+                <h3 class="penalty-card__title">Einstiegszeitpunkt</h3>
+                <p class="penalty-card__desc">Attendance zaehlt erst ab diesem Raid. Raids davor werden ignoriert.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field">
+                <label class="penalty-label">Spieler</label>
+                <div class="autocomplete-wrap"><input type="text" id="joindate-player" class="penalty-input" placeholder="Name eingeben..." autocomplete="off"><div class="autocomplete-list hidden" id="joindate-player-ac"></div></div>
+              </div>
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Erster Raid</label>
+                <select id="joindate-raid" class="penalty-input penalty-select raid-date-select-all"><option value="">Raid waehlen...</option></select>
+              </div>
+              <button id="btn-joindate-add" class="penalty-btn penalty-btn--add">+ Festlegen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-joindate-table">
+                <thead><tr><th>Spieler</th><th>Erster Raid</th><th>Von</th><th></th></tr></thead>
+                <tbody id="admin-joindate-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Consumes Tab -->
+      <div id="admin-tab-consumes" class="admin-tab-panel">
+        <div class="penalty-grid">
+          <div class="penalty-card penalty-card--info" style="grid-column:1/-1">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#129514;</div>
+              <div>
+                <h3 class="penalty-card__title">Elixier-Regeln</h3>
+                <p class="penalty-card__desc">Pro Class:Spec festlegen welche Flasks und Elixier-Combos akzeptiert werden. Default „Any" = jede Flask oder Battle+Guardian-Combo zählt.</p>
+              </div>
+            </div>
+            <div id="elixir-policy-editor" class="elixir-policy-editor">
+              <p class="text-muted">Lade...</p>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;align-items:center;padding-top:14px;border-top:1px solid var(--border)">
+              <button id="btn-elixir-policy-save" class="penalty-btn penalty-btn--add">Speichern</button>
+              <span id="elixir-policy-status" class="penalty-card__status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracking-Config: zeigt was getrackt wird (read-only) -->
+      <div id="admin-tab-tracking" class="admin-tab-panel">
+        <div id="tracking-content"><p class="text-muted">Lade...</p></div>
+      </div>
+
+      <!-- Wipes Tab (Tier 1+2+3 Wipe-Analyse, admin-only) -->
+      <!-- Actions Tab -->
+      <div id="admin-tab-actions" class="admin-tab-panel">
+        <div class="penalty-grid">
+
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128260;</div>
+              <div>
+                <h3 class="penalty-card__title">TMB Daten laden</h3>
+                <p class="penalty-card__desc">Attendance, Loot und Raidgroups von ThatsMybis neu laden.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <button id="btn-tmb-attendance" class="penalty-btn penalty-btn--add">Attendance laden</button>
+              <button id="btn-tmb-loot" class="penalty-btn penalty-btn--add">Loot laden</button>
+              <button id="btn-tmb-raidgroups" class="penalty-btn penalty-btn--add">Raidgroups laden</button>
+              <button id="btn-tmb-all" class="penalty-btn penalty-btn--add">Alles laden</button>
+            </div>
+            <div id="tmb-status" class="penalty-card__status"></div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table">
+                <thead><tr><th>Datenquelle</th><th>Letztes Update</th><th>Naechster Auto-Refresh</th></tr></thead>
+                <tbody id="data-status-body"><tr><td colspan="3" class="text-muted">Lade...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128226;</div>
+              <div>
+                <h3 class="penalty-card__title">Liveticker manuell starten</h3>
+                <p class="penalty-card__desc">Pollt 30 Min nach letzter Log-Aktivität. Ideal außerhalb der regulären Raidzeiten.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <button id="btn-live-start" class="penalty-btn penalty-btn--add">Liveticker jetzt starten</button>
+              <button id="btn-live-stop" class="penalty-btn penalty-btn--remove" style="display:none">Liveticker stoppen</button>
+            </div>
+            <div id="live-manual-status" class="penalty-card__status"></div>
+          </div>
+
+          <div class="penalty-card penalty-card--warn">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128472;</div>
+              <div>
+                <h3 class="penalty-card__title">Reports &amp; Analysen</h3>
+                <p class="penalty-card__desc">Guild-Reports von WCL holen und analysieren.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <button id="btn-action-refresh-all" class="penalty-btn penalty-btn--add">Alle Reports neu laden</button>
+              <button id="btn-rebuild-progression" class="penalty-btn penalty-btn--add">Spieler-Entwicklung neu erstellen</button>
+            </div>
+            <div id="refresh-status" class="penalty-card__status"></div>
+            <div id="progression-rebuild-status" class="penalty-card__status"></div>
+            <div id="pipeline-status" class="penalty-card__status" style="margin-top:0.5rem"></div>
+          </div>
+
+          <div class="penalty-card penalty-card--danger">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128465;</div>
+              <div>
+                <h3 class="penalty-card__title">WCL API-Cache</h3>
+                <p class="penalty-card__desc">Gecachte WCL-API-Antworten loeschen. Danach werden alle Daten frisch von WCL geholt.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <button id="btn-clear-cache" class="penalty-btn penalty-btn--add">Cache loeschen</button>
+            </div>
+            <div id="cache-status" class="penalty-card__status"></div>
+          </div>
+
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128197;</div>
+              <div>
+                <h3 class="penalty-card__title">Report-Startdatum</h3>
+                <p class="penalty-card__desc">Reports vor diesem Datum werden ignoriert.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Startdatum</label>
+                <input type="date" id="setting-start-date" class="penalty-input">
+              </div>
+              <button id="btn-save-start-date" class="penalty-btn penalty-btn--add">Speichern</button>
+            </div>
+            <div id="start-date-status" class="penalty-card__status"></div>
+          </div>
+
+          <div class="penalty-card penalty-card--muted">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128202;</div>
+              <div>
+                <h3 class="penalty-card__title">System-Info</h3>
+                <p class="penalty-card__desc">Cache-Statistiken und System-Status.</p>
+              </div>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table">
+                <tbody id="admin-sysinfo-body">
+                  <tr><td colspan="2" class="text-muted">Lade...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Changelog Tab -->
+      <div id="admin-tab-changelog" class="admin-tab-panel">
+        <div class="penalty-card penalty-card--muted">
+          <div class="penalty-card__header">
+            <div class="penalty-card__icon">&#128221;</div>
+            <div>
+              <h3 class="penalty-card__title">Aenderungsprotokoll</h3>
+              <p class="penalty-card__desc">Alle Admin-Aktionen chronologisch.</p>
+            </div>
+          </div>
+          <div class="penalty-card__table-wrap">
+            <table class="penalty-table" id="admin-changelog-table">
+              <thead><tr><th>Zeitpunkt</th><th>Benutzer</th><th>Aktion</th><th>Details</th></tr></thead>
+              <tbody id="admin-changelog-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Tab (superadmin only) -->
+      <div id="admin-tab-users" class="admin-tab-panel">
+        <div class="penalty-grid">
+          <div class="penalty-card penalty-card--muted">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128100;</div>
+              <div>
+                <h3 class="penalty-card__title">Admin-Benutzer verwalten</h3>
+                <p class="penalty-card__desc">Benutzer hinzufuegen, Rollen aendern, Passwoerter zuruecksetzen.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field">
+                <label class="penalty-label">Benutzername</label>
+                <input type="text" id="new-admin-username" class="penalty-input" placeholder="username" autocomplete="off">
+              </div>
+              <div class="penalty-field">
+                <label class="penalty-label">Passwort</label>
+                <input type="password" id="new-admin-password" class="penalty-input" placeholder="min. 6 Zeichen" autocomplete="new-password">
+              </div>
+              <div class="penalty-field penalty-field--small">
+                <label class="penalty-label">Rolle</label>
+                <select id="new-admin-role" class="penalty-input penalty-select">
+                  <option value="admin">Admin</option>
+                  <option value="superadmin">Superadmin</option>
+                </select>
+              </div>
+              <button id="btn-add-admin-user" class="penalty-btn penalty-btn--add">+ Erstellen</button>
+            </div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table" id="admin-users-table">
+                <thead><tr><th>Benutzer</th><th>Rolle</th><th>Erstellt</th><th></th></tr></thead>
+                <tbody id="admin-users-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── VIEW: PLAYER DETAIL ─── -->
+  <section id="view-player" class="view">
+    <div class="player-detail-header">
+      <button id="btn-player-back" class="btn btn-sm">&larr; Zurueck</button>
+      <div id="player-detail-title"></div>
+    </div>
+    <div id="player-detail-content"></div>
+  </section>
+
+  <!-- --- VIEW: BUG TRACKER --- -->
+  <section id="view-bugs" class="view">
+    <div class="admin-header">
+      <button id="btn-bugs-back" class="btn btn-sm">&larr; Zurueck</button>
+      <h2>Bug Tracker</h2>
+      <label style="margin-left:auto;font-size:.78rem;display:flex;align-items:center;gap:.4rem;color:var(--text-muted)">
+        <input type="checkbox" id="bugs-show-closed"> Geschlossene
+      </label>
+    </div>
+    <div class="bugs-form">
+      <input type="text" id="bug-title" class="input" placeholder="Was ist kaputt?" style="margin-bottom:.5rem">
+      <textarea id="bug-desc" class="input" placeholder="Details, Steps to Reproduce, etc." rows="2" style="margin-bottom:.75rem"></textarea>
+      <button id="btn-bug-submit" class="btn btn-primary btn-sm">Melden</button>
+    </div>
+    <div id="bugs-list"></div>
+  </section>
+
+  <!-- ─── GIRLY MODE (Claudiamarie Easter Egg) ─── -->
+  <div class="girly-bg"></div>
+  <div class="cloud cloud-1"></div>
+  <div class="cloud cloud-2"></div>
+  <div class="cloud cloud-3"></div>
+  <div class="cloud cloud-4"></div>
+  <div class="cloud cloud-5"></div>
+  <div class="unicorn unicorn-1"></div>
+  <div class="unicorn unicorn-2"></div>
+  <div class="unicorn unicorn-3"></div>
+  <div class="butterfly butterfly-1"></div>
+  <div class="butterfly butterfly-2"></div>
+  <div class="butterfly butterfly-3"></div>
+  <div class="girly-rain" id="girly-rain"></div>
+  <div class="girly-sparkles" id="girly-sparkles"></div>
+
+  <!-- ─── CUSTOM MODAL ─── -->
+  <div id="cla-modal-overlay" class="cla-modal-overlay hidden">
+    <div class="cla-modal">
+      <div class="cla-modal__title" id="cla-modal-title"></div>
+      <div class="cla-modal__body" id="cla-modal-body"></div>
+      <div class="cla-modal__actions" id="cla-modal-actions"></div>
+    </div>
+  </div>
+
+  <!-- ─── LOADING OVERLAY ─── -->
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <p id="loading-text">Laden...</p>
+  </div>
+
+  <script>window.whTooltips = {colorLinks: true, iconizeLinks: true, renameLinks: true};</script>
+  <script src="https://wow.zamimg.com/js/tooltips.js"></script>
+  <script src="js/data.js?v=6"></script>
+  <script src="js/gear_data.js?v=3"></script>
+  <script src="js/gem_db.js?v=3"></script>
+  <script src="js/sockets_db.js?v=3"></script>
+  <script src="js/spell_ranks.js?v=3"></script>
+  <script src="js/api.js?v=4"></script>
+  <script src="js/app.js?v=145"></script>
+</body>
+</html>

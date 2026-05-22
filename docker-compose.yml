@@ -1,0 +1,17 @@
+services:
+  cla-webapp:
+    build: .
+    container_name: cla-webapp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./js:/app/js
+      - ./css:/app/css
+      - ./index.html:/app/index.html
+      - ./server.js:/app/server.js
+      - ./db.js:/app/db.js
+      - ./preanalyze.js:/app/preanalyze.js
+      - ./progression.js:/app/progression.js
+      - ./simulate-live.js:/app/simulate-live.js

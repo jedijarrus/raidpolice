@@ -1,0 +1,80 @@
+# ── Secrets / Credentials ──
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.pfx
+*.p12
+credentials*
+secrets*
+*-secret*
+*_secret*
+
+# ── Datenbank (enthält API-Keys, TMB-Cookie, User-Daten) ──
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+data/
+cla-cache.db*
+cache.db*
+cla_cache.db*
+
+# ── Live-State / Caches ──
+live-sim-state.json
+*.cache
+
+# ── Node ──
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+
+# ── Build / Dist ──
+dist/
+build/
+.next/
+.cache/
+
+# ── Editor / OS ──
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs ──
+*.log
+logs/
+
+# ── Screenshots / Debug-Artefakte ──
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+screenshots/
+.playwright-mcp/
+
+# ── Claude Code ──
+.claude/
+
+# ── Tests / temp ──
+tmp/
+temp/
+*.tmp
+*.bak
+
+# ── Project-spezifisch ──
+DOCUMENTATION.md
+DOCUMENTATION-private.md
+*-snapshot.md
+robots.txt
+flowtando_snapshot.md
+claudiamarie-preview.html
+enchant-check.html
+check-*.js
