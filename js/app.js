@@ -4247,7 +4247,169 @@
   function loadAllAdmin() {
     loadAdminReports(); loadAdminPenalties(); loadAdminRevoked(); loadAdminExcused(); loadAdminExcusedPlayers(); loadAdminExcludedPlayers(); loadAdminPlayerRoles(); loadAdminJoinDates(); loadAdminChangelog(); loadSysinfo(); loadRaidDateDropdowns();
     loadDataStatus(); loadPipelineStatus(); loadElixirPolicyEditor(); loadTrackingConfig();
+    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor();
     if (adminRole === 'superadmin') loadAdminUsers();
+  }
+
+  // ─── Admin: Allgemein (Branding + TMB + Faction) ───
+  async function loadGeneralSettings() {
+    if (!$('#set-appName')) return;
+    try {
+      const r = await apiFetch('/api/settings');
+      const s = await r.json();
+      $('#set-appName').value = s.appName || '';
+      $('#set-guildName').value = s.guildName || '';
+      $('#set-serverName').value = s.serverName || '';
+      $('#set-region').value = s.region || '';
+      $('#set-faction').value = s.faction || '';
+      $('#set-tmbGuildId').value = s.tmbGuildId || '';
+      $('#set-tmbGuildSlug').value = s.tmbGuildSlug || '';
+      $('#set-tmbCookie').value = '';
+      $('#set-tmbCookie').placeholder = s.tmbCookie ? '(gesetzt — leerlassen um zu behalten)' : 'laravel_session=...';
+    } catch (_) {}
+    const btn = $('#btn-save-general');
+    if (btn && !btn._wired) {
+      btn._wired = true;
+      btn.addEventListener('click', async () => {
+        const body = {
+          appName: $('#set-appName').value.trim(),
+          guildName: $('#set-guildName').value.trim(),
+          serverName: $('#set-serverName').value.trim(),
+          region: $('#set-region').value.trim(),
+          faction: $('#set-faction').value,
+          tmbGuildId: $('#set-tmbGuildId').value.trim(),
+          tmbGuildSlug: $('#set-tmbGuildSlug').value.trim(),
+        };
+        const tmbC = $('#set-tmbCookie').value.trim();
+        if (tmbC) body.tmbCookie = tmbC;
+        const msg = $('#general-save-msg');
+        try {
+          await apiFetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          msg.textContent = '✓ Gespeichert — Reload empfohlen';
+          msg.style.color = '#4ade80';
+        } catch (e) { msg.textContent = '✗ Fehler: ' + e.message; msg.style.color = '#f87171'; }
+      });
+    }
+  }
+
+  // ─── Admin: Raid-Schedule ───
+  function _raidScheduleState() { return window._raidSchedule || (window._raidSchedule = []); }
+  async function loadRaidScheduleEditor() {
+    if (!$('#schedule-body')) return;
+    try {
+      const r = await apiFetch('/api/settings');
+      const s = await r.json();
+      let sched = [];
+      try { sched = JSON.parse(s.raidSchedule || '[]'); } catch (_) {}
+      window._raidSchedule = Array.isArray(sched) ? sched : [];
+    } catch (_) { window._raidSchedule = []; }
+    renderRaidScheduleRows();
+    const addBtn = $('#btn-schedule-add');
+    if (addBtn && !addBtn._wired) {
+      addBtn._wired = true;
+      addBtn.addEventListener('click', () => {
+        _raidScheduleState().push({ dayOfWeek: 4, startTime: '19:30', raidSize: 25, track: 'current' });
+        renderRaidScheduleRows();
+      });
+    }
+    const saveBtn = $('#btn-schedule-save');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const msg = $('#schedule-save-msg');
+        try {
+          await apiFetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ raidSchedule: JSON.stringify(_raidScheduleState()) }) });
+          msg.textContent = '✓ Gespeichert'; msg.style.color = '#4ade80';
+        } catch (e) { msg.textContent = '✗ Fehler: ' + e.message; msg.style.color = '#f87171'; }
+      });
+    }
+  }
+  function renderRaidScheduleRows() {
+    const tbody = $('#schedule-body');
+    if (!tbody) return;
+    const dayNames = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+    const sched = _raidScheduleState();
+    if (!sched.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-muted">Noch keine Einträge.</td></tr>'; return; }
+    tbody.innerHTML = sched.map((row, i) => `
+      <tr>
+        <td><select data-idx="${i}" data-k="dayOfWeek">${[1,2,3,4,5,6,7].map(d => `<option value="${d}"${row.dayOfWeek===d?' selected':''}>${dayNames[d]}</option>`).join('')}</select></td>
+        <td><input type="text" data-idx="${i}" data-k="startTime" value="${escapeHtml(row.startTime || '')}" placeholder="HH:MM" maxlength="5" style="width:80px"></td>
+        <td><input type="number" data-idx="${i}" data-k="raidSize" value="${row.raidSize || 25}" min="10" max="40" style="width:70px"></td>
+        <td><select data-idx="${i}" data-k="track"><option value="current"${row.track==='current'?' selected':''}>Current</option><option value="legacy"${row.track==='legacy'?' selected':''}>Legacy</option></select></td>
+        <td><button class="btn btn-sm" data-rm="${i}">✕</button></td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('select[data-idx], input[data-idx]').forEach(el => {
+      el.addEventListener('change', () => {
+        const i = +el.dataset.idx, k = el.dataset.k;
+        let v = el.value;
+        if (k === 'dayOfWeek' || k === 'raidSize') v = parseInt(v, 10) || 0;
+        sched[i][k] = v;
+      });
+    });
+    tbody.querySelectorAll('button[data-rm]').forEach(btn => {
+      btn.addEventListener('click', () => { sched.splice(+btn.dataset.rm, 1); renderRaidScheduleRows(); });
+    });
+  }
+
+  // ─── Admin: Easter Eggs ───
+  function _eggsState() { return window._eggsList || (window._eggsList = []); }
+  async function loadEasterEggsEditor() {
+    if (!$('#eggs-body')) return;
+    try {
+      const r = await apiFetch('/api/settings');
+      const s = await r.json();
+      let eggs = [];
+      try { eggs = JSON.parse(s.easterEggs || '[]'); } catch (_) {}
+      window._eggsList = Array.isArray(eggs) ? eggs : [];
+    } catch (_) { window._eggsList = []; }
+    renderEggsRows();
+    const addBtn = $('#btn-eggs-add');
+    if (addBtn && !addBtn._wired) {
+      addBtn._wired = true;
+      addBtn.addEventListener('click', () => {
+        _eggsState().push({ name: '', type: 'wobble', alt: '' });
+        renderEggsRows();
+      });
+    }
+    const saveBtn = $('#btn-eggs-save');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const msg = $('#eggs-save-msg');
+        const cleaned = _eggsState().filter(e => e && e.name && e.type);
+        try {
+          await apiFetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ easterEggs: JSON.stringify(cleaned) }) });
+          msg.textContent = '✓ Gespeichert — Reload empfohlen'; msg.style.color = '#4ade80';
+        } catch (e) { msg.textContent = '✗ Fehler: ' + e.message; msg.style.color = '#f87171'; }
+      });
+    }
+  }
+  function renderEggsRows() {
+    const tbody = $('#eggs-body');
+    if (!tbody) return;
+    const eggs = _eggsState();
+    if (!eggs.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Noch keine Einträge.</td></tr>'; return; }
+    const types = ['wobble', 'popup', 'girly', 'letterswap', 'slacker-wobble', 'tank-death-wobble'];
+    tbody.innerHTML = eggs.map((row, i) => `
+      <tr>
+        <td><input type="text" data-idx="${i}" data-k="name" value="${escapeHtml(row.name || '')}" placeholder="Spielername" style="width:140px"></td>
+        <td><select data-idx="${i}" data-k="type">${types.map(t => `<option value="${t}"${row.type===t?' selected':''}>${t}</option>`).join('')}</select></td>
+        <td><input type="text" data-idx="${i}" data-k="alt" value="${escapeHtml(row.alt || row.text || '')}" placeholder="Alt/Popup-Text" style="width:200px"></td>
+        <td><button class="btn btn-sm" data-rm="${i}">✕</button></td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('input[data-idx], select[data-idx]').forEach(el => {
+      el.addEventListener('change', () => {
+        const i = +el.dataset.idx, k = el.dataset.k;
+        // 'alt' für die meisten Types, aber 'popup' nutzt 'text' — beides in 'alt' speichern; Backend/Renderer akzeptiert beide
+        eggs[i][k] = el.value;
+        if (k === 'alt' && eggs[i].type === 'popup') { eggs[i].text = el.value; }
+      });
+    });
+    tbody.querySelectorAll('button[data-rm]').forEach(btn => {
+      btn.addEventListener('click', () => { eggs.splice(+btn.dataset.rm, 1); renderEggsRows(); });
+    });
   }
 
   // ─── Admin: Wipe-Analyse ───

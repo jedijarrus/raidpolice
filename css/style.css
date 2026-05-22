@@ -330,6 +330,23 @@ input:focus, select:focus {
   display: grid;
   gap: 10px;
 }
+/* Admin: General settings rows (label + input) */
+.setting-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.88rem;
+}
+.setting-row > span { color: var(--text-muted, #999); }
+.setting-row > input, .setting-row > select {
+  background: var(--bg-input, #1a1d24);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text, #ddd);
+  font-size: 0.88rem;
+}
 .setting-item {
   display: flex;
   align-items: center;
