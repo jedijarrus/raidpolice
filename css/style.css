@@ -1699,7 +1699,7 @@ body.light-mode .stats-medal-3 { color: #8a5520; }
   100% { opacity: 0; right: -34px; top: -18px; }
 }
 
-/* Nisali Easter Egg */
+/* Letterswap Easter Egg (i↔a per Hover) */
 .egg-letterswap { display: inline-block; cursor: pointer; }
 .egg-letterswap-alt { display: none; }
 .egg-letterswap:hover .egg-letterswap-orig { display: none; }

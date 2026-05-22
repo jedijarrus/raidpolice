@@ -1,5 +1,5 @@
 /**
- * Plague Stasi - Main Application
+ * raidpolice - Main Application
  * Guild dashboard + per-report analysis with SQLite caching
  */
 (function () {
@@ -978,7 +978,7 @@
         return `${link}<span class="egg-girly" onmouseenter="document.body.classList.add('girly-mode','girly-cursor')" onmouseleave="document.body.classList.remove('girly-mode','girly-cursor')">${safeName}</span>${end}`;
       }
       if (egg.type === 'letterswap') {
-        // Nisali → swappt i↔a per Hover (CSS-Animation)
+        // Letterswap → CSS-Animation, swappt einen Buchstaben per Hover
         return `${link}<span class="egg-letterswap"><span class="egg-letterswap-name">N<span class="egg-letterswap-orig">i</span><span class="egg-letterswap-alt">a</span>sali</span></span>${end}`;
       }
       if (egg.type === 'slacker-wobble' && egg.alt) {
@@ -3302,7 +3302,7 @@
     html += '</tbody></table></div>';
     container.innerHTML = html;
 
-    // Wire report links to open in Stasi tool
+    // Wire report links to open in the report viewer
     container.querySelectorAll('th[data-code]').forEach(th => {
       th.style.cursor = 'pointer';
       th.addEventListener('click', () => openReport(th.dataset.code));

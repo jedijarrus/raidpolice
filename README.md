@@ -32,7 +32,7 @@ Configure the following in the Admin UI:
 
 ### Allgemein
 
-- **App-Name** — appears in the browser tab and header (e.g. "Plague Stasi")
+- **App-Name** — appears in the browser tab and header (e.g. "My Raid Tool")
 - **Gildenname / Server / Region / Fraktion** — used for WCL guild lookups
 - **TMB Guild-ID + Guild-Slug** — the numeric ID and URL slug for your guild on
   thatsmybis.com (find in the URL: `thatsmybis.com/{guildId}/{slug}/...`)

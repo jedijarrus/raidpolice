@@ -65,14 +65,24 @@ Die Settings-Page ist als Accordion strukturiert, Reihenfolge ist relevant:
 
 ### 3. ThatsMyBis Guild
 
+[ThatsMyBis](https://thatsmybis.com) ist ein verbreitetes Tool zur Verwaltung von WoW-Gilden — Mitgliederliste, Loot-Tracking (Wishlists + Verteilung) und Raid-Attendance. raidpolice integriert sich gegen drei TMB-CSV-Exports:
+
+| Export | Wofür raidpolice es braucht |
+|---|---|
+| **Attendance** | Pro Raid-Tag: wer war da, wer benched, wer entschuldigt. Wird genutzt um Wochen ohne WCL-Log trotzdem zu zählen (TMB-only-Spalte in der Spieler-Entwicklung) und um die Attendance-Prozente korrekt zu berechnen (sonst würde abwesend = abwesend in WCL auch wenn der Spieler manuell als „present" eingetragen war). |
+| **Loot** | Welcher Spieler hat welches Item bekommen (mit Offspec-Markierung). Zeigt sich als Loot-Spalte in der Spieler-Entwicklung + Tooltip mit Item-Liste. Loot-Aberkennungen (Admin → Strafen) werden auf diese Daten angewendet. |
+| **Raid Groups** | Member → Alt-Characters Mapping. Erlaubt den „Charaktere zusammenfassen"-Filter in der Spieler-Entwicklung, damit ein Member mit Alts nicht mehrfach in der Liste auftaucht. |
+
 | Feld | Beispiel |
 |---|---|
-| Guild-ID | `23865` |
-| Guild-Slug | `plague` |
+| Guild-ID | `12345` |
+| Guild-Slug | `myguild` |
 
 Beide kommen aus der TMB-URL: `thatsmybis.com/{id}/{slug}/dashboard`.
 
-Wenn nicht gesetzt: TMB-Endpunkte liefern 404, Attendance/Loot/Raidgroups fehlen.
+Wenn nicht gesetzt: TMB-Endpunkte liefern 404, Attendance/Loot/Raidgroups fehlen — die App läuft trotzdem, aber ohne TMB-Anreicherung. Reine WCL-Daten reichen für Buff/Cons/Gear-Analyse, die Spieler-Entwicklung wird ohne TMB allerdings ungenauer (z.B. ist „abwesend" und „entschuldigt" nicht unterscheidbar).
+
+**Cache & Refresh**: TMB-Daten werden alle 30 min im Hintergrund neu geholt. Manuell triggern: Admin → Aktionen → „TMB Daten laden".
 
 ### 4. Raid-Schedule
 
@@ -579,10 +589,10 @@ Zone-IDs aus `js/data.js` → `CLA_DATA.zones`. Wenn eine Zone in keiner Liste: 
 
 ```json
 [
-  {"name": "Nofax", "type": "wobble", "alt": "Lootfax"},
-  {"name": "Alirya", "type": "popup", "text": "No Glaives"},
-  {"name": "Claudiamarie", "type": "girly"},
-  {"name": "Nofax", "type": "tank-death-wobble", "alt": "Pppappfax"}
+  {"name": "PlayerA", "type": "wobble", "alt": "AltName"},
+  {"name": "PlayerB", "type": "popup", "text": "Popup-Text"},
+  {"name": "PlayerC", "type": "girly"},
+  {"name": "TankPlayer", "type": "tank-death-wobble", "alt": "DeathWord"}
 ]
 ```
 
@@ -658,15 +668,16 @@ In der Wipe-Analyse referenzierte Spell-IDs für „avoidable damage" pro Boss.
 
 ```bash
 docker exec \
-  -e SEED_APP_NAME='Plague Stasi' \
-  -e SEED_TMB_GUILD_ID='23865' \
-  -e SEED_TMB_GUILD_SLUG='plague' \
+  -e SEED_APP_NAME='My Raid Tool' \
+  -e SEED_GUILD_NAME='MyGuild' \
+  -e SEED_TMB_GUILD_ID='12345' \
+  -e SEED_TMB_GUILD_SLUG='myguild' \
   -e SEED_RAID_SCHEDULE='[...]' \
   -e SEED_EASTER_EGGS='[...]' \
   -e SEED_CURRENT_ZONES='[1007,1008,1056]' \
   -e SEED_LEGACY_ZONES='[1001,1002,1047,1048]' \
   -e SEED_EDIKT_TEXTS='{...}' \
-  cla-webapp node /app/seed-existing-deploy.js
+  raidpolice node /app/seed-existing-deploy.js
 ```
 
 Idempotent — schreibt nur Keys die noch nicht (oder leer) gesetzt sind.
