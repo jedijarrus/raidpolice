@@ -415,6 +415,19 @@ input:focus, select:focus {
   align-items: center;
   z-index: 5;
 }
+
+/* Admin Aktionen-Tab: Gruppen-Header */
+.actions-group-header {
+  font-size: 0.78rem;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-muted, #888);
+  font-weight: 700;
+  margin: 18px 4px 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.actions-group-header:first-child { margin-top: 0; }
 .setting-item {
   display: flex;
   align-items: center;

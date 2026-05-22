@@ -438,8 +438,10 @@ async function handleRequest(req, res) {
     try { easterEggs = JSON.parse(cache.getSetting('easterEggs') || '[]'); } catch (_) {}
     let raidSchedule = [];
     try { raidSchedule = JSON.parse(cache.getSetting('raidSchedule') || '[]'); } catch (_) {}
+    let ediktTexts = {};
+    try { ediktTexts = JSON.parse(cache.getSetting('ediktTexts') || '{}'); } catch (_) {}
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-    res.end(JSON.stringify({ appName, guildName, serverName, region, faction, easterEggs, raidSchedule }));
+    res.end(JSON.stringify({ appName, guildName, serverName, region, faction, easterEggs, raidSchedule, ediktTexts }));
     return;
   }
 
@@ -480,7 +482,7 @@ async function handleRequest(req, res) {
     const all = cache.getAllSettings();
     // FIX #1: Only return safe, non-sensitive settings
     const SAFE_KEYS = ['guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug',
-      'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones',
+      'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones', 'ediktTexts',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
     const safe = {};
@@ -496,7 +498,7 @@ async function handleRequest(req, res) {
 
   if (parsed.pathname === '/api/settings' && req.method === 'POST') {
     const ALLOWED_SETTINGS = ['apiKey', 'guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug', 'tmbCookie',
-      'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones',
+      'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones', 'ediktTexts',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
     try {

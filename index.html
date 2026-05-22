@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <title>Raidpolice</title>
-  <link rel="stylesheet" href="css/style.css?v=102">
+  <link rel="stylesheet" href="css/style.css?v=103">
 </head>
 <body class="dark-mode">
 
@@ -332,6 +332,39 @@
           </details>
 
           <details class="settings-section">
+            <summary class="settings-section-title">Edikt-Texte</summary>
+            <div class="settings-section-body">
+              <p class="settings-section-hint">Texte der Edikt-Seite anpassen. Subtitle + Footer dürfen HTML enthalten (z.B. <code>&lt;strong&gt;</code>). Class/Role-Flavor sind JSON-Maps.</p>
+              <div class="settings-grid">
+                <label class="setting-row"><span>Titel</span><input type="text" id="set-ediktTitle" maxlength="120"></label>
+                <label class="setting-row"><span>Untertitel</span><textarea id="set-ediktSubtitle" rows="3" style="resize:vertical"></textarea></label>
+                <label class="setting-row"><span>Footer</span><textarea id="set-ediktFooter" rows="2" style="resize:vertical"></textarea></label>
+                <label class="setting-row"><span>Leer-Text</span><input type="text" id="set-ediktEmpty" maxlength="200"></label>
+                <label class="setting-row"><span>Regel: Frei</span><input type="text" id="set-ediktRuleAny" maxlength="200"></label>
+                <label class="setting-row"><span>Regel: Flask only</span><input type="text" id="set-ediktRuleFlask" maxlength="200"></label>
+                <label class="setting-row"><span>Whitelist-Header Flask</span><input type="text" id="set-ediktWhitelistFlask" maxlength="120"></label>
+                <label class="setting-row"><span>Whitelist-Header Combo</span><input type="text" id="set-ediktWhitelistCombo" maxlength="200"></label>
+                <label class="setting-row"><span>Battle-Label</span><input type="text" id="set-ediktComboBattle" maxlength="40"></label>
+                <label class="setting-row"><span>Guardian-Label</span><input type="text" id="set-ediktComboGuardian" maxlength="40"></label>
+                <label class="setting-row"><span>Combo „keine erlaubt"</span><input type="text" id="set-ediktComboNone" maxlength="80"></label>
+                <label class="setting-row"><span>„Nur Flask zählt"</span><input type="text" id="set-ediktComboFlaskOnly" maxlength="200"></label>
+                <label class="setting-row"><span>Class-Überschrift</span><input type="text" id="set-ediktClassHeading" maxlength="80" placeholder="An die {className}"></label>
+                <label class="setting-row"><span>Role-Überschrift</span><input type="text" id="set-ediktRoleHeading" maxlength="120" placeholder="An die {className} ({specLabel}){flavor}"></label>
+              </div>
+              <p class="settings-section-hint" style="margin-top:14px"><strong>Class-Flavor</strong> (JSON: <code>{"Warrior":"Krieger",…}</code>)</p>
+              <textarea id="set-ediktClassFlavor" rows="4" style="width:100%;font-family:monospace;font-size:0.82rem;background:rgba(0,0,0,0.3);color:#ddd;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:8px"></textarea>
+              <p class="settings-section-hint" style="margin-top:14px"><strong>Role-Flavor</strong> (JSON: <code>{"Warrior:tank":"…",…}</code>) — optional</p>
+              <textarea id="set-ediktRoleFlavor" rows="6" style="width:100%;font-family:monospace;font-size:0.82rem;background:rgba(0,0,0,0.3);color:#ddd;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:8px"></textarea>
+              <p class="settings-section-hint" style="margin-top:14px"><strong>Role-Footnote</strong> (JSON: <code>{"Rogue:dps":"…",…}</code>) — optional</p>
+              <textarea id="set-ediktRoleFootnote" rows="4" style="width:100%;font-family:monospace;font-size:0.82rem;background:rgba(0,0,0,0.3);color:#ddd;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:8px"></textarea>
+              <div class="settings-row-actions">
+                <button id="btn-edikt-save" class="btn btn-sm btn-primary">Edikt-Texte speichern</button>
+                <span id="edikt-save-msg" class="text-muted"></span>
+              </div>
+            </div>
+          </details>
+
+          <details class="settings-section">
             <summary class="settings-section-title">Easter Eggs</summary>
             <div class="settings-section-body">
               <p class="settings-section-hint">Spieler-spezifische Animationen beim Hover über den Namen.</p>
@@ -616,68 +649,11 @@
         <div id="tracking-content"><p class="text-muted">Lade...</p></div>
       </div>
 
-      <!-- Wipes Tab (Tier 1+2+3 Wipe-Analyse, admin-only) -->
-      <!-- Actions Tab -->
+      <!-- Actions Tab — gruppiert in Daten-Refresh / Live / Konfiguration / Gefährlich / Status -->
       <div id="admin-tab-actions" class="admin-tab-panel">
+
+        <h3 class="actions-group-header">Daten aktualisieren</h3>
         <div class="penalty-grid">
-
-          <div class="penalty-card penalty-card--info">
-            <div class="penalty-card__header">
-              <div class="penalty-card__icon">&#9654;</div>
-              <div>
-                <h3 class="penalty-card__title">Live-Ticker Simulation</h3>
-                <p class="penalty-card__desc">Simuliert einen Live-Raid mit Daten aus einem gecachten Report. Default: neuester Report.</p>
-              </div>
-            </div>
-            <div class="penalty-card__form">
-              <div class="penalty-field penalty-field--grow">
-                <label class="penalty-label">Report</label>
-                <select id="sim-report-select" class="penalty-input"><option value="">— Neuester Report —</option></select>
-              </div>
-              <button id="btn-sim-start" class="penalty-btn penalty-btn--add">▶ Starten</button>
-              <button id="btn-sim-stop" class="penalty-btn">■ Stoppen</button>
-            </div>
-            <div id="sim-status" class="penalty-card__status text-muted">Lade Status...</div>
-          </div>
-
-          <div class="penalty-card penalty-card--info">
-            <div class="penalty-card__header">
-              <div class="penalty-card__icon">&#128260;</div>
-              <div>
-                <h3 class="penalty-card__title">TMB Daten laden</h3>
-                <p class="penalty-card__desc">Attendance, Loot und Raidgroups von ThatsMybis neu laden.</p>
-              </div>
-            </div>
-            <div class="penalty-card__form">
-              <button id="btn-tmb-attendance" class="penalty-btn penalty-btn--add">Attendance laden</button>
-              <button id="btn-tmb-loot" class="penalty-btn penalty-btn--add">Loot laden</button>
-              <button id="btn-tmb-raidgroups" class="penalty-btn penalty-btn--add">Raidgroups laden</button>
-              <button id="btn-tmb-all" class="penalty-btn penalty-btn--add">Alles laden</button>
-            </div>
-            <div id="tmb-status" class="penalty-card__status"></div>
-            <div class="penalty-card__table-wrap">
-              <table class="penalty-table">
-                <thead><tr><th>Datenquelle</th><th>Letztes Update</th><th>Naechster Auto-Refresh</th></tr></thead>
-                <tbody id="data-status-body"><tr><td colspan="3" class="text-muted">Lade...</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="penalty-card penalty-card--info">
-            <div class="penalty-card__header">
-              <div class="penalty-card__icon">&#128226;</div>
-              <div>
-                <h3 class="penalty-card__title">Liveticker manuell starten</h3>
-                <p class="penalty-card__desc">Pollt 30 Min nach letzter Log-Aktivität. Ideal außerhalb der regulären Raidzeiten.</p>
-              </div>
-            </div>
-            <div class="penalty-card__form">
-              <button id="btn-live-start" class="penalty-btn penalty-btn--add">Liveticker jetzt starten</button>
-              <button id="btn-live-stop" class="penalty-btn penalty-btn--remove" style="display:none">Liveticker stoppen</button>
-            </div>
-            <div id="live-manual-status" class="penalty-card__status"></div>
-          </div>
-
           <div class="penalty-card penalty-card--warn">
             <div class="penalty-card__header">
               <div class="penalty-card__icon">&#128472;</div>
@@ -695,20 +671,69 @@
             <div id="pipeline-status" class="penalty-card__status" style="margin-top:0.5rem"></div>
           </div>
 
-          <div class="penalty-card penalty-card--danger">
+          <div class="penalty-card penalty-card--info">
             <div class="penalty-card__header">
-              <div class="penalty-card__icon">&#128465;</div>
+              <div class="penalty-card__icon">&#128260;</div>
               <div>
-                <h3 class="penalty-card__title">WCL API-Cache</h3>
-                <p class="penalty-card__desc">Gecachte WCL-API-Antworten loeschen. Danach werden alle Daten frisch von WCL geholt.</p>
+                <h3 class="penalty-card__title">TMB Daten laden</h3>
+                <p class="penalty-card__desc">Attendance, Loot und Raidgroups von ThatsMyBis neu laden.</p>
               </div>
             </div>
             <div class="penalty-card__form">
-              <button id="btn-clear-cache" class="penalty-btn penalty-btn--add">Cache loeschen</button>
+              <button id="btn-tmb-attendance" class="penalty-btn penalty-btn--add">Attendance</button>
+              <button id="btn-tmb-loot" class="penalty-btn penalty-btn--add">Loot</button>
+              <button id="btn-tmb-raidgroups" class="penalty-btn penalty-btn--add">Raidgroups</button>
+              <button id="btn-tmb-all" class="penalty-btn penalty-btn--add">Alles</button>
             </div>
-            <div id="cache-status" class="penalty-card__status"></div>
+            <div id="tmb-status" class="penalty-card__status"></div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table">
+                <thead><tr><th>Datenquelle</th><th>Letztes Update</th><th>Naechster Auto-Refresh</th></tr></thead>
+                <tbody id="data-status-body"><tr><td colspan="3" class="text-muted">Lade...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="actions-group-header">Live-Ticker</h3>
+        <div class="penalty-grid">
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128226;</div>
+              <div>
+                <h3 class="penalty-card__title">Liveticker manuell starten</h3>
+                <p class="penalty-card__desc">Pollt 30 Min nach letzter Log-Aktivität. Ideal außerhalb der regulären Raidzeiten.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <button id="btn-live-start" class="penalty-btn penalty-btn--add">Jetzt starten</button>
+              <button id="btn-live-stop" class="penalty-btn penalty-btn--remove" style="display:none">Stoppen</button>
+            </div>
+            <div id="live-manual-status" class="penalty-card__status"></div>
           </div>
 
+          <div class="penalty-card penalty-card--info">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#9654;</div>
+              <div>
+                <h3 class="penalty-card__title">Live-Ticker Simulation</h3>
+                <p class="penalty-card__desc">Spielt einen gecachten Report als Live-Raid ab (zum Testen/Demo).</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Report</label>
+                <select id="sim-report-select" class="penalty-input"><option value="">— Neuester Report —</option></select>
+              </div>
+              <button id="btn-sim-start" class="penalty-btn penalty-btn--add">▶ Starten</button>
+              <button id="btn-sim-stop" class="penalty-btn">■ Stoppen</button>
+            </div>
+            <div id="sim-status" class="penalty-card__status text-muted">Lade Status...</div>
+          </div>
+        </div>
+
+        <h3 class="actions-group-header">Konfiguration</h3>
+        <div class="penalty-grid">
           <div class="penalty-card penalty-card--info">
             <div class="penalty-card__header">
               <div class="penalty-card__icon">&#128197;</div>
@@ -726,7 +751,10 @@
             </div>
             <div id="start-date-status" class="penalty-card__status"></div>
           </div>
+        </div>
 
+        <h3 class="actions-group-header">Wartung &amp; Status</h3>
+        <div class="penalty-grid">
           <div class="penalty-card penalty-card--muted">
             <div class="penalty-card__header">
               <div class="penalty-card__icon">&#128202;</div>
@@ -744,7 +772,21 @@
             </div>
           </div>
 
+          <div class="penalty-card penalty-card--danger">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128465;</div>
+              <div>
+                <h3 class="penalty-card__title">WCL API-Cache</h3>
+                <p class="penalty-card__desc">Gecachte WCL-API-Antworten löschen. Danach werden alle Daten frisch von WCL geholt.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <button id="btn-clear-cache" class="penalty-btn penalty-btn--add">Cache löschen</button>
+            </div>
+            <div id="cache-status" class="penalty-card__status"></div>
+          </div>
         </div>
+
       </div>
 
       <!-- Changelog Tab -->
@@ -873,6 +915,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=150"></script>
+  <script src="js/app.js?v=151"></script>
 </body>
 </html>

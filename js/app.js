@@ -2410,45 +2410,45 @@
     }
   }
 
+  // Defaults — werden von ediktTexts-Setting überschrieben
+  const EDIKT_DEFAULTS = {
+    title: 'Edikt zu den Konsumeln',
+    subtitle: 'Hier sind die Regeln für Flask- und Elixier-Nutzung pro Klasse und Spec.',
+    emptyState: 'Noch keine Verordnung erlassen. Jeder mag panschen wie er beliebt.',
+    ruleAny: 'Frei verfügbar — keine Einschränkungen.',
+    ruleFlaskOnly: 'Nur folgende Flasks sind erlaubt. Combos sind verboten!',
+    whitelistFlasksLabel: 'Flasken erlaubt:',
+    whitelistComboLabel: 'Elixier-Combo (beide Hälften müssen aus der Liste sein):',
+    comboBattleLabel: 'Battle',
+    comboGuardianLabel: 'Guardian',
+    comboNoneText: '— keine erlaubt —',
+    comboFlaskOnlyText: 'Combo-Tinkturen: keine erlaubt. Nur Flask zählt!',
+    classHeading: 'An die {className}',
+    roleHeading: 'An die {className} ({specLabel}){flavor}',
+    footer: '',
+    specLabel: { tank:'Tank', healer:'Heiler', balance:'Balance', elemental:'Elemental', feral:'Feral', enhancement:'Enhancement', retribution:'Vergeltung', dps:'DPS' },
+    classFlavor: { Warrior:'Krieger', Rogue:'Schurken', Hunter:'Jäger', Paladin:'Paladine', Druid:'Druiden', Shaman:'Schamanen', Mage:'Magier', Warlock:'Hexenmeister', Priest:'Priester' },
+    roleFlavor: {},
+    roleFootnote: {},
+  };
   function renderEdikt(policy, idToName) {
-    const SPEC_LABEL = { tank:'Tank', healer:'Heiler', balance:'Balance', elemental:'Elemental', feral:'Feral', enhancement:'Enhancement', retribution:'Vergeltung', dps:'DPS' };
-    // Per Class:Spec ein eigenes Pöbel-Etikett vom Bär-Gebieter persönlich vergeben
-    const ROLE_FLAVOR = {
-      'Warrior:tank': 'die eisernen Bastionen',
-      'Warrior:dps': 'die Schwert-Wirbler',
-      'Rogue:dps': 'die Backstab-Bruderschaft',
-      'Hunter:dps': 'die Pfeil-Spukenden',
-      'Paladin:tank': 'die Hammer-Schildträger',
-      'Paladin:retribution': 'die Recht-Hämmerer',
-      'Paladin:healer': 'die Glockenheiler',
-      'Druid:tank': 'die Bärenbastionen',
-      'Druid:feral': 'die Krallenschleifer',
-      'Druid:balance': 'die Moonkin-Brigade',
-      'Druid:healer': 'die Wurzelweber',
-      'Shaman:enhancement': 'die Sturm-Schläger',
-      'Shaman:elemental': 'die Blitzschleudern',
-      'Shaman:healer': 'die Ketten-Wärter',
-      'Mage:dps': 'die Frostbomber',
-      'Warlock:dps': 'die Schatten-Beschwörer',
-      'Priest:dps': 'die Schatten-Mönche',
-      'Priest:healer': 'die Klagenden Heiler',
-    };
-    const CLASS_FLAVOR = {
-      Warrior: 'Krieger', Rogue: 'Schurken', Hunter: 'Jäger',
-      Paladin: 'Paladine', Druid: 'Druiden', Shaman: 'Schamanen',
-      Mage: 'Magier', Warlock: 'Hexenmeister', Priest: 'Priester',
-    };
-    // Sondervermerke des Gebieters
-    const ROLE_FOOTNOTE = {
-      'Rogue:dps': 'Eigentlich einerlei, was ihr nehmt — Loot bekommt ihr ohnehin keinen.',
-    };
+    const T = Object.assign({}, EDIKT_DEFAULTS, (window._branding && window._branding.ediktTexts) || {});
+    // Maps sind keine plain merges — auf Object-Ebene mergen
+    T.specLabel = Object.assign({}, EDIKT_DEFAULTS.specLabel, T.specLabel || {});
+    T.classFlavor = Object.assign({}, EDIKT_DEFAULTS.classFlavor, T.classFlavor || {});
+    T.roleFlavor = T.roleFlavor || {};
+    T.roleFootnote = T.roleFootnote || {};
+    const SPEC_LABEL = T.specLabel;
+    const CLASS_FLAVOR = T.classFlavor;
+    const ROLE_FLAVOR = T.roleFlavor;
+    const ROLE_FOOTNOTE = T.roleFootnote;
 
     let html = '';
     html += '<div class="edikt-scroll">';
     html += '<div class="edikt-header">';
     html += '<div class="edikt-seal">📜</div>';
-    html += '<h1 class="edikt-title">Pöbel höret her!</h1>';
-    html += '<p class="edikt-subtitle">Ivan der Kekliche, Bär-Gebieter und Selbsternannter Hüter der Tinkturen, verkündet hiermit sein <strong>Edikt zu den erlaubten Konsumeln</strong>. Wer dawider verstößt, soll des Loots verwiesen werden!</p>';
+    html += `<h1 class="edikt-title">${escapeHtml(T.title)}</h1>`;
+    html += `<p class="edikt-subtitle">${T.subtitle}</p>`;
     html += '</div>';
 
     // Group entries by class
@@ -2461,7 +2461,7 @@
     }
 
     if (!grouped.size) {
-      html += '<div class="edikt-empty"><p>Der Bär-Gebieter hat noch keine Verordnung erlassen. Jeder mag pansche und mische wie er beliebt.</p></div>';
+      html += `<div class="edikt-empty"><p>${escapeHtml(T.emptyState)}</p></div>`;
       html += '</div>';
       return html;
     }
@@ -2482,19 +2482,25 @@
         const sa = a.split(':')[1]; const sb = b.split(':')[1];
         return (specOrder[sa]||9) - (specOrder[sb]||9);
       });
-      html += `<div class="edikt-class"><h2 class="edikt-class-title ${css}">An die ${escapeHtml(clsName)}</h2><div class="edikt-class-body">`;
+      const clsHeadingTxt = (T.classHeading || 'An die {className}').replace('{className}', clsName);
+      html += `<div class="edikt-class"><h2 class="edikt-class-title ${css}">${escapeHtml(clsHeadingTxt)}</h2><div class="edikt-class-body">`;
       for (const role of clsRoles) {
         const spec = role.split(':')[1];
         const specLabel = SPEC_LABEL[spec] || spec;
-        const specFlavor = ROLE_FLAVOR[role] || spec;
+        const specFlavor = ROLE_FLAVOR[role] || '';
         const p = policy[role] || { mode: 'any' };
+        const flavorPart = specFlavor ? ` <em>– ${escapeHtml(specFlavor)}</em>` : '';
+        const roleHeadingHtml = (T.roleHeading || 'An die {className} ({specLabel}){flavor}')
+          .replace('{className}', `<strong>${escapeHtml(clsName)}`)
+          .replace('{specLabel}', `${escapeHtml(specLabel)}</strong>`)
+          .replace('{flavor}', flavorPart);
         html += '<div class="edikt-role">';
-        html += `<div class="edikt-role-title">— An die <strong>${escapeHtml(clsName)} (${escapeHtml(specLabel)})</strong> <em>– ${escapeHtml(specFlavor)}</em>:</div>`;
+        html += `<div class="edikt-role-title">— ${roleHeadingHtml}:</div>`;
         if (p.mode === 'any') {
-          html += '<p class="edikt-rule edikt-rule--free">»Lasst sie panschen wie sie wollen — der Gebieter blicket gnädig.«</p>';
+          html += `<p class="edikt-rule edikt-rule--free">${escapeHtml(T.ruleAny)}</p>`;
         } else if (p.mode === 'flask-only') {
           const flasks = (p.flaskAllowed || []).map(id => idToName[id] || `#${id}`);
-          html += '<p class="edikt-rule edikt-rule--strict">»Nur folgende Flasks sind geduldet. Combos sind <strong>verboten</strong>!«</p>';
+          html += `<p class="edikt-rule edikt-rule--strict">${escapeHtml(T.ruleFlaskOnly)}</p>`;
           html += '<ul class="edikt-list">' + flasks.map(n => `<li>${escapeHtml(n)}</li>`).join('') + '</ul>';
         } else {
           // whitelist
@@ -2503,16 +2509,16 @@
           const ga = (p.guardianAllowed || []).map(id => idToName[id] || `#${id}`);
           html += '<div class="edikt-whitelist">';
           if (fl.length) {
-            html += '<div><strong>Flasken erlaubt:</strong><ul class="edikt-list">' + fl.map(n => `<li>${escapeHtml(n)}</li>`).join('') + '</ul></div>';
+            html += `<div><strong>${escapeHtml(T.whitelistFlasksLabel)}</strong><ul class="edikt-list">` + fl.map(n => `<li>${escapeHtml(n)}</li>`).join('') + '</ul></div>';
           }
           if (ba.length || ga.length) {
-            html += '<div><strong>Elixier-Combo (beide Hälften müssen aus der Liste sein):</strong>';
+            html += `<div><strong>${escapeHtml(T.whitelistComboLabel)}</strong>`;
             html += '<div class="edikt-combo">';
-            html += '<div><em>Battle:</em><ul class="edikt-list">' + (ba.length ? ba.map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="edikt-empty-line">— keine erlaubt —</li>') + '</ul></div>';
-            html += '<div><em>Guardian:</em><ul class="edikt-list">' + (ga.length ? ga.map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="edikt-empty-line">— keine erlaubt —</li>') + '</ul></div>';
+            html += `<div><em>${escapeHtml(T.comboBattleLabel)}:</em><ul class="edikt-list">` + (ba.length ? ba.map(n => `<li>${escapeHtml(n)}</li>`).join('') : `<li class="edikt-empty-line">${escapeHtml(T.comboNoneText)}</li>`) + '</ul></div>';
+            html += `<div><em>${escapeHtml(T.comboGuardianLabel)}:</em><ul class="edikt-list">` + (ga.length ? ga.map(n => `<li>${escapeHtml(n)}</li>`).join('') : `<li class="edikt-empty-line">${escapeHtml(T.comboNoneText)}</li>`) + '</ul></div>';
             html += '</div></div>';
           } else {
-            html += '<p class="edikt-rule"><em>Combo-Tinkturen: keine erlaubt. Nur Flask zählt!</em></p>';
+            html += `<p class="edikt-rule"><em>${escapeHtml(T.comboFlaskOnlyText)}</em></p>`;
           }
           html += '</div>';
         }
@@ -2524,7 +2530,7 @@
       html += '</div></div>';
     }
 
-    html += '<div class="edikt-footer">— Verkündet von <strong>Ivan dem Keklichen</strong>, gestempelt mit dem Siegel der Bären-Pranke 🐻</div>';
+    if (T.footer) html += `<div class="edikt-footer">${T.footer}</div>`;
     html += '</div>';
     return html;
   }
@@ -4298,7 +4304,7 @@
   function loadAllAdmin() {
     loadAdminReports(); loadAdminPenalties(); loadAdminRevoked(); loadAdminExcused(); loadAdminExcusedPlayers(); loadAdminExcludedPlayers(); loadAdminPlayerRoles(); loadAdminJoinDates(); loadAdminChangelog(); loadSysinfo(); loadRaidDateDropdowns();
     loadDataStatus(); loadPipelineStatus(); loadElixirPolicyEditor(); loadTrackingConfig();
-    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadSimControl();
+    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl();
     if (adminRole === 'superadmin') loadAdminUsers();
   }
 
@@ -4440,6 +4446,79 @@
     tbody.querySelectorAll('button[data-rm]').forEach(btn => {
       btn.addEventListener('click', () => { sched.splice(+btn.dataset.rm, 1); renderRaidScheduleRows(); });
     });
+  }
+
+  // ─── Admin: Edikt-Texte ───
+  async function loadEdiktTextsEditor() {
+    if (!$('#set-ediktTitle')) return;
+    let texts = {};
+    try {
+      const r = await apiFetch('/api/settings');
+      const s = await r.json();
+      try { texts = JSON.parse(s.ediktTexts || '{}'); } catch (_) { texts = {}; }
+    } catch (_) {}
+    const T = Object.assign({}, EDIKT_DEFAULTS, texts);
+    T.classFlavor = Object.assign({}, EDIKT_DEFAULTS.classFlavor, texts.classFlavor || {});
+    T.roleFlavor = texts.roleFlavor || {};
+    T.roleFootnote = texts.roleFootnote || {};
+    $('#set-ediktTitle').value = T.title || '';
+    $('#set-ediktSubtitle').value = T.subtitle || '';
+    $('#set-ediktFooter').value = T.footer || '';
+    $('#set-ediktEmpty').value = T.emptyState || '';
+    $('#set-ediktRuleAny').value = T.ruleAny || '';
+    $('#set-ediktRuleFlask').value = T.ruleFlaskOnly || '';
+    $('#set-ediktWhitelistFlask').value = T.whitelistFlasksLabel || '';
+    $('#set-ediktWhitelistCombo').value = T.whitelistComboLabel || '';
+    $('#set-ediktComboBattle').value = T.comboBattleLabel || '';
+    $('#set-ediktComboGuardian').value = T.comboGuardianLabel || '';
+    $('#set-ediktComboNone').value = T.comboNoneText || '';
+    $('#set-ediktComboFlaskOnly').value = T.comboFlaskOnlyText || '';
+    $('#set-ediktClassHeading').value = T.classHeading || '';
+    $('#set-ediktRoleHeading').value = T.roleHeading || '';
+    $('#set-ediktClassFlavor').value = JSON.stringify(T.classFlavor, null, 2);
+    $('#set-ediktRoleFlavor').value = JSON.stringify(T.roleFlavor, null, 2);
+    $('#set-ediktRoleFootnote').value = JSON.stringify(T.roleFootnote, null, 2);
+    const btn = $('#btn-edikt-save');
+    if (btn && !btn._wired) {
+      btn._wired = true;
+      btn.addEventListener('click', async () => {
+        const msg = $('#edikt-save-msg');
+        let classFlavor, roleFlavor, roleFootnote;
+        try {
+          classFlavor = JSON.parse($('#set-ediktClassFlavor').value || '{}');
+          roleFlavor = JSON.parse($('#set-ediktRoleFlavor').value || '{}');
+          roleFootnote = JSON.parse($('#set-ediktRoleFootnote').value || '{}');
+        } catch (e) {
+          msg.textContent = '✗ JSON-Parse-Fehler: ' + e.message;
+          msg.style.color = '#f87171';
+          return;
+        }
+        const body = {
+          ediktTexts: JSON.stringify({
+            title: $('#set-ediktTitle').value,
+            subtitle: $('#set-ediktSubtitle').value,
+            footer: $('#set-ediktFooter').value,
+            emptyState: $('#set-ediktEmpty').value,
+            ruleAny: $('#set-ediktRuleAny').value,
+            ruleFlaskOnly: $('#set-ediktRuleFlask').value,
+            whitelistFlasksLabel: $('#set-ediktWhitelistFlask').value,
+            whitelistComboLabel: $('#set-ediktWhitelistCombo').value,
+            comboBattleLabel: $('#set-ediktComboBattle').value,
+            comboGuardianLabel: $('#set-ediktComboGuardian').value,
+            comboNoneText: $('#set-ediktComboNone').value,
+            comboFlaskOnlyText: $('#set-ediktComboFlaskOnly').value,
+            classHeading: $('#set-ediktClassHeading').value,
+            roleHeading: $('#set-ediktRoleHeading').value,
+            classFlavor, roleFlavor, roleFootnote,
+          }),
+        };
+        try {
+          await apiFetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          msg.textContent = '✓ Gespeichert — Edikt-Tab neu laden zum Anzeigen';
+          msg.style.color = '#4ade80';
+        } catch (e) { msg.textContent = '✗ Fehler: ' + e.message; msg.style.color = '#f87171'; }
+      });
+    }
   }
 
   // ─── Admin: Live-Ticker Sim ───

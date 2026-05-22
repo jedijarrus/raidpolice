@@ -23,6 +23,7 @@ const SEEDS = {
   easterEggs: process.env.SEED_EASTER_EGGS || '[]',
   currentZones: process.env.SEED_CURRENT_ZONES || '',
   legacyZones: process.env.SEED_LEGACY_ZONES || '',
+  ediktTexts: process.env.SEED_EDIKT_TEXTS || '',
 };
 
 let written = 0, skipped = 0;
