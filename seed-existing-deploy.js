@@ -19,10 +19,10 @@ const SEEDS = {
   faction: process.env.SEED_FACTION || '',
   tmbGuildId: process.env.SEED_TMB_GUILD_ID || '',
   tmbGuildSlug: process.env.SEED_TMB_GUILD_SLUG || '',
-  // Default raidSchedule = empty; configure via Admin UI
   raidSchedule: process.env.SEED_RAID_SCHEDULE || '[]',
-  // Default easterEggs = empty; configure via Admin UI
   easterEggs: process.env.SEED_EASTER_EGGS || '[]',
+  currentZones: process.env.SEED_CURRENT_ZONES || '',
+  legacyZones: process.env.SEED_LEGACY_ZONES || '',
 };
 
 let written = 0, skipped = 0;

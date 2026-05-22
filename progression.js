@@ -88,20 +88,28 @@ function buildNameToId(db) {
 }
 
 // ─── Track classification (current vs legacy content) ───
-// Default: Tier-aware. T5+ (SSC/TK) ist immer current — egal welcher Wochentag.
-// T≤4 (Kara/Gruul/Mag) am Montag (Berlin TZ) → legacy.
-const CURRENT_CONTENT_MIN_TIER = 5;
+// Konfigurierbar via Settings:
+//   - currentZones: JSON-Array von Zone-IDs, die als "current" zählen
+//   - legacyZones:  JSON-Array von Zone-IDs, die als "legacy" zählen
+// Falls Zone in keiner Liste: Fallback auf Tier-Heuristik (T5+ = current, T≤4 = legacy).
+function _trackZoneSets() {
+  let current = [], legacy = [];
+  try { current = JSON.parse(cache.getSetting('currentZones') || '[]'); } catch (_) {}
+  try { legacy  = JSON.parse(cache.getSetting('legacyZones')  || '[]'); } catch (_) {}
+  return { currentSet: new Set(current.map(Number)), legacySet: new Set(legacy.map(Number)) };
+}
 function getDefaultTrackForReport(report) {
-  if (!report || !report.start) return 'current';
-  const zone = report.zone != null ? CLA_DATA.zones[report.zone] : null;
+  if (!report) return 'current';
+  const zoneId = report.zone != null ? Number(report.zone) : null;
+  const { currentSet, legacySet } = _trackZoneSets();
+  if (zoneId != null) {
+    if (currentSet.has(zoneId)) return 'current';
+    if (legacySet.has(zoneId)) return 'legacy';
+  }
+  // Fallback: Tier-Heuristik (T5+ = current, sonst legacy)
+  const zone = zoneId != null ? CLA_DATA.zones[zoneId] : null;
   const tier = zone ? (zone.tier || 0) : 0;
-  // T5+ ist current unabhängig vom Wochentag
-  if (tier >= CURRENT_CONTENT_MIN_TIER) return 'current';
-  // Tier ≤ 4: Wochentag-basiert — Mo = legacy
-  const berlin = new Date(new Date(report.start).toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-  const adjusted = new Date(berlin);
-  if (adjusted.getHours() < 5) adjusted.setDate(adjusted.getDate() - 1);
-  return adjusted.getDay() === 1 ? 'legacy' : 'current';
+  return tier >= 5 ? 'current' : 'legacy';
 }
 function getTrackForReport(report) {
   if (!report || !report.id) return 'current';

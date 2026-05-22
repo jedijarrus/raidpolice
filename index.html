@@ -61,59 +61,11 @@
       <button class="dash-tab-btn" data-dtab="dtab-edikt">📜 Edikt</button>
     </nav>
 
-    <!-- Raids Tab -->
+    <!-- Raids Tab — Cards werden dynamisch aus raidSchedule generiert -->
     <div id="dtab-raids" class="dash-tab-panel active">
-      <div class="raid-days-row">
-        <!-- 25-Man Donnerstag -->
-        <div class="raid-card">
-          <div class="raid-card-header">
-            <span class="raid-card-icon">&#9876;</span>
-            <span>25-Man — Donnerstag</span>
-          </div>
-          <div class="raid-card-body">
-            <div id="reports-25-thu"></div>
-            <p id="no-reports-25-thu" class="text-muted hidden">Keine Donnerstag-Reports gefunden.</p>
-          </div>
-        </div>
-
-        <!-- 25-Man Dienstag -->
-        <div class="raid-card">
-          <div class="raid-card-header">
-            <span class="raid-card-icon">&#9876;</span>
-            <span>25-Man — Dienstag</span>
-          </div>
-          <div class="raid-card-body">
-            <div id="reports-25-tue"></div>
-            <p id="no-reports-25-tue" class="text-muted hidden">Keine Dienstag-Reports gefunden.</p>
-          </div>
-        </div>
-
-        <!-- 25-Man Montag (Altcontent) -->
-        <div class="raid-card">
-          <div class="raid-card-header">
-            <span class="raid-card-icon">&#9876;</span>
-            <span>25-Man — Montag</span>
-          </div>
-          <div class="raid-card-body">
-            <div id="reports-25-mon"></div>
-            <p id="no-reports-25-mon" class="text-muted hidden">Keine Montag-Reports gefunden.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 10-Man Section -->
-      <div class="raid-card" style="margin-top: 24px;">
-        <div class="raid-card-header">
-          <span class="raid-card-icon">&#9876;</span>
-          <span>10-Man Raids</span>
-        </div>
-        <div class="raid-card-body">
-          <div id="reports-10"></div>
-          <p id="no-reports-10" class="text-muted hidden">Keine 10er Reports gefunden.</p>
-        </div>
-      </div>
-
-      <!-- Unknown zone -->
+      <div id="raid-day-cards" class="raid-days-row"></div>
+      <div id="raid-other-cards"></div>
+      <!-- Fallback "Sonstige" -->
       <div id="section-other" class="raid-card hidden" style="margin-top: 24px;">
         <div class="raid-card-header">
           <span class="raid-card-icon">&#9876;</span>
@@ -142,7 +94,7 @@
     <!-- Spieler-Entwicklung Tab -->
     <div id="dtab-progression" class="dash-tab-panel">
       <div class="raid-section">
-        <h3 class="section-title">Spieler-Entwicklung (25-Man)</h3>
+        <h3 class="section-title">Spieler-Entwicklung</h3>
         <div class="progression-track-toggle" style="display:flex;gap:6px;margin-bottom:10px">
           <button id="btn-prog-track-current" class="btn btn-sm btn-primary" data-track="current">Aktueller Content</button>
           <button id="btn-prog-track-legacy" class="btn btn-sm" data-track="legacy">Altcontent</button>
@@ -162,7 +114,7 @@
     <!-- Statistik Tab -->
     <div id="dtab-stats" class="dash-tab-panel">
       <div class="raid-section">
-        <h3 class="section-title">Raid-Statistiken (25-Man)</h3>
+        <h3 class="section-title">Raid-Statistiken</h3>
         <div id="stats-status" class="status-bar hidden"></div>
         <div id="stats-results"><p class="text-muted">Statistiken werden beim Oeffnen geladen...</p></div>
       </div>
@@ -344,6 +296,9 @@
           <label class="setting-row"><span>Guild-Slug:</span><input type="text" id="set-tmbGuildSlug" placeholder="z.B. plague" maxlength="40"></label>
           <label class="setting-row"><span>TMB-Cookie:</span><input type="password" id="set-tmbCookie" placeholder="laravel_session=..." autocomplete="new-password"></label>
         </div>
+        <h3 class="section-title" style="margin-top:24px">Content-Klassifikation</h3>
+        <p class="text-muted" style="margin-bottom:12px">Welche Raid-Zones sind „Current Content" und welche „Legacy"? Beeinflusst die Progression-Bewertung.</p>
+        <div id="zone-classification"></div>
         <div style="margin-top:18px"><button id="btn-save-general" class="btn btn-primary">Speichern</button><span id="general-save-msg" class="text-muted" style="margin-left:12px"></span></div>
       </div>
 
@@ -877,6 +832,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=146"></script>
+  <script src="js/app.js?v=147"></script>
 </body>
 </html>

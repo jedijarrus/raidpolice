@@ -477,7 +477,7 @@ async function handleRequest(req, res) {
     const all = cache.getAllSettings();
     // FIX #1: Only return safe, non-sensitive settings
     const SAFE_KEYS = ['guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug',
-      'raidSchedule', 'easterEggs',
+      'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
     const safe = {};
@@ -493,7 +493,7 @@ async function handleRequest(req, res) {
 
   if (parsed.pathname === '/api/settings' && req.method === 'POST') {
     const ALLOWED_SETTINGS = ['apiKey', 'guildName', 'serverName', 'region', 'faction', 'appName', 'tmbGuildId', 'tmbGuildSlug', 'tmbCookie',
-      'raidSchedule', 'easterEggs',
+      'raidSchedule', 'easterEggs', 'currentZones', 'legacyZones',
       'vanillaEnchants', 'rareGems', 'epicGems', 'foodRequired', 'flaskRequired', 'weaponEnhRequired',
       'analysisSettings'];
     try {

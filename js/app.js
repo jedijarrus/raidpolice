@@ -589,120 +589,133 @@
     }
   }
 
-  // Raid day classification: Thursday (4) and Friday (5) → "thu", Tuesday (2) → "tue"
-  function getRaidDay(timestamp) {
-    const dow = new Date(timestamp).getDay(); // 0=Sun, 1=Mon, 2=Tue, 4=Thu, 5=Fri
-    if (dow === 1) return 'mon';
-    if (dow === 2) return 'tue';
-    return 'thu'; // Thu, Fri (release), or anything else defaults to Thu
+  // Raid-Day-Key — basiert auf Wochentag (1=Mo .. 7=So).
+  // Wird gegen raidSchedule abgeglichen.
+  function getRaidDayKey(timestamp) {
+    const dow = new Date(timestamp).getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    return dow === 0 ? 7 : dow; // ISO-Weekday (1=Mo..7=So)
   }
+  // Rückwärtskompatibel: Manche Code-Pfade nutzen noch 'mon'/'tue'/'thu' Strings.
+  function getRaidDay(timestamp) {
+    const k = getRaidDayKey(timestamp);
+    return k === 1 ? 'mon' : k === 2 ? 'tue' : k === 4 ? 'thu' : k === 5 ? 'fri' : 'other';
+  }
+  const DAY_NAMES_DE = { 1: 'Montag', 2: 'Dienstag', 3: 'Mittwoch', 4: 'Donnerstag', 5: 'Freitag', 6: 'Samstag', 7: 'Sonntag' };
 
   async function renderDashboard(guildName, serverName, region, forceRefresh) {
     $('#guild-title').textContent = guildName;
     $('#guild-subtitle').textContent = `${serverName} (${region}) — ${guildReports.length} Reports`;
 
-    // Only show TBC raids
-    const reports25Mon = [];
-    const reports25Tue = [];
-    const reports25Thu = [];
-    const reports10 = [];
+    // Raid-Schedule lesen (vom Branding-Endpoint geladen)
+    const schedule = (window._branding && Array.isArray(window._branding.raidSchedule)) ? window._branding.raidSchedule : [];
 
-    for (const r of guildReports) {
-      const zone = CLA_DATA.zones[r.zone];
-      if (!zone || !zone.tbc) continue; // skip non-TBC
-      if (zone.size >= 25) {
-        const day = getRaidDay(r.start);
-        if (day === 'mon') reports25Mon.push(r);
-        else if (day === 'tue') reports25Tue.push(r);
-        else reports25Thu.push(r);
-      } else {
-        reports10.push(r);
+    // Reports nach Day-of-Week + Size-Bucket bucketen
+    const tbcReports = guildReports.filter(r => {
+      const z = CLA_DATA.zones[r.zone];
+      return z && z.tbc;
+    });
+    $('#guild-subtitle').textContent = `${serverName} (${region}) — ${tbcReports.length} TBC Reports`;
+
+    // Schedule-Einträge → ein Bucket pro Eintrag
+    const cardEntries = schedule.length ? schedule.slice() : [
+      // Default falls keine Schedule konfiguriert: 25-Man-Container als Catch-All
+      { dayOfWeek: 0, raidSize: 25, track: 'current' },
+    ];
+    // Eindeutige Größen aus Schedule (für 10er-Karte Fallback)
+    const sizesInSchedule = new Set(cardEntries.map(e => e.raidSize));
+
+    // Reports zu Schedule-Buckets matchen (Match auf dayOfWeek + raidSize)
+    const bucketed = new Map(); // key: idx in cardEntries → Reports[]
+    const unmatched10 = []; // 10-Mans die in keinem Bucket landen
+    for (const r of tbcReports) {
+      const z = CLA_DATA.zones[r.zone];
+      const size = z.size;
+      const dow = getRaidDayKey(r.start);
+      let matched = false;
+      for (let i = 0; i < cardEntries.length; i++) {
+        const e = cardEntries[i];
+        if (e.raidSize === size && (e.dayOfWeek === dow || e.dayOfWeek === 0)) {
+          if (!bucketed.has(i)) bucketed.set(i, []);
+          bucketed.get(i).push(r);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        if (size === 10) unmatched10.push(r);
       }
     }
 
-    const tbcCount = reports25Mon.length + reports25Thu.length + reports25Tue.length + reports10.length;
-    $('#guild-subtitle').textContent = `${serverName} (${region}) — ${tbcCount} TBC Reports`;
-
-    // Compute missing weeks for each raid day
-    const allReports25 = [...reports25Thu, ...reports25Tue];
-    let missingThu = [], missingTue = [];
-    if (allReports25.length) {
-      function isoWeek(date) {
-        const tmp = new Date(date.getTime());
-        tmp.setHours(0,0,0,0);
-        tmp.setDate(tmp.getDate() + 3 - (tmp.getDay() + 6) % 7);
-        const week1 = new Date(tmp.getFullYear(), 0, 4);
-        return `${tmp.getFullYear()}-W${String(Math.round(((tmp - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7) + 1).padStart(2,'0')}`;
-      }
-      function weekToDate(wk, dayOffset) {
-        const parts = wk.match(/(\d+)-W(\d+)/);
-        const yr = parseInt(parts[1]), wn = parseInt(parts[2]);
-        const jan4 = new Date(yr, 0, 4);
-        const mon = new Date(jan4.getTime());
-        mon.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7 + (wn - 1) * 7);
-        const d = new Date(mon); d.setDate(mon.getDate() + dayOffset);
-        return d;
-      }
-      const weekMap = new Map();
-      for (const r of allReports25) {
-        const wk = isoWeek(new Date(r.start));
-        if (!weekMap.has(wk)) weekMap.set(wk, { thu: false, tue: false });
-        weekMap.get(wk)[getRaidDay(r.start)] = true;
-      }
-      const earliest = Math.min(...allReports25.map(r => r.start));
+    // Fehlende Wochen berechnen (pro Card-Entry)
+    function isoWeek(date) {
+      const tmp = new Date(date.getTime());
+      tmp.setHours(0,0,0,0);
+      tmp.setDate(tmp.getDate() + 3 - (tmp.getDay() + 6) % 7);
+      const week1 = new Date(tmp.getFullYear(), 0, 4);
+      return `${tmp.getFullYear()}-W${String(Math.round(((tmp - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7) + 1).padStart(2,'0')}`;
+    }
+    function weekToDate(wk, dayOffset) {
+      const parts = wk.match(/(\d+)-W(\d+)/);
+      const yr = parseInt(parts[1]), wn = parseInt(parts[2]);
+      const jan4 = new Date(yr, 0, 4);
+      const mon = new Date(jan4.getTime());
+      mon.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7 + (wn - 1) * 7);
+      const d = new Date(mon); d.setDate(mon.getDate() + dayOffset);
+      return d;
+    }
+    const missingByCardIdx = new Map();
+    for (let i = 0; i < cardEntries.length; i++) {
+      const e = cardEntries[i];
+      if (!e.dayOfWeek) continue; // Catch-All Bucket → keine Missing-Detection
+      const reps = bucketed.get(i) || [];
+      if (!reps.length) continue;
+      const earliest = Math.min(...reps.map(r => r.start));
       const startDate = new Date(earliest);
       startDate.setHours(0,0,0,0);
       startDate.setDate(startDate.getDate() - (startDate.getDay() + 6) % 7);
       const now = new Date();
-      const allWeeks = [];
+      const presentWeeks = new Set(reps.map(r => isoWeek(new Date(r.start))));
+      const missing = [];
+      const earliestDate = new Date(earliest); earliestDate.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
       for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 7)) {
-        allWeeks.push(isoWeek(d));
+        const wk = isoWeek(d);
+        if (presentWeeks.has(wk)) continue;
+        const dayOffset = e.dayOfWeek - 1; // ISO-Mo=0
+        const expectedDate = weekToDate(wk, dayOffset);
+        if (expectedDate >= earliestDate && expectedDate < today) {
+          missing.push({ week: wk, date: expectedDate });
+        }
       }
-      const earliestDate = new Date(earliest);
-      earliestDate.setHours(0,0,0,0);
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      for (const wk of allWeeks) {
-        const tue = weekToDate(wk, 1);
-        const thu = weekToDate(wk, 3);
-        const days = weekMap.get(wk) || { thu: false, tue: false };
-        if (!days.thu && thu >= earliestDate && thu < today) missingThu.push({ week: wk, date: thu });
-        if (!days.tue && tue >= earliestDate && tue < today) missingTue.push({ week: wk, date: tue });
-      }
+      missingByCardIdx.set(i, missing);
     }
 
-    // Fetch TMB attendance data to enrich missing weeks
+    // TMB-Daten holen + mit fehlenden Wochen anreichern
     let tmbData = null;
     try {
       const tmbResp = await apiFetch('/api/tmb/attendance' + (forceRefresh ? '?refresh=1' : ''));
       if (tmbResp.ok) tmbData = await tmbResp.json();
     } catch (e) { console.warn('TMB fetch failed:', e); }
-
-    // Match TMB raids to missing weeks by date
     if (tmbData && tmbData.raids) {
-      const tmbByDate = new Map();
+      const tmbByDateKey = new Map();
       for (const r of tmbData.raids) {
         const d = new Date(r.date.replace(' ', 'T') + 'Z');
-        const dateKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-        const dow = d.getUTCDay();
-        const day = dow === 2 ? 'tue' : 'thu';
-        tmbByDate.set(dateKey + '|' + day, r);
+        const dk = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+        const dow = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+        tmbByDateKey.set(`${dk}|${dow}`, r);
       }
-      for (const m of missingThu) {
-        const dk = `${m.date.getFullYear()}-${String(m.date.getMonth()+1).padStart(2,'0')}-${String(m.date.getDate()).padStart(2,'0')}`;
-        const tmb = tmbByDate.get(dk + '|thu');
-        if (tmb) m.tmb = tmb;
-      }
-      for (const m of missingTue) {
-        const dk = `${m.date.getFullYear()}-${String(m.date.getMonth()+1).padStart(2,'0')}-${String(m.date.getDate()).padStart(2,'0')}`;
-        const tmb = tmbByDate.get(dk + '|tue');
-        if (tmb) m.tmb = tmb;
+      for (const [idx, missList] of missingByCardIdx) {
+        const e = cardEntries[idx];
+        for (const m of missList) {
+          const dk = `${m.date.getFullYear()}-${String(m.date.getMonth()+1).padStart(2,'0')}-${String(m.date.getDate()).padStart(2,'0')}`;
+          const tmb = tmbByDateKey.get(`${dk}|${e.dayOfWeek}`);
+          if (tmb) m.tmb = tmb;
+        }
       }
     }
 
-    // Fetch TMB loot data + raid groups (member→chars) in parallel
-    let tmbLoot = null;
-    let tmbRaidGroups = null;
+    // TMB Loot + Raid Groups parallel
+    let tmbLoot = null, tmbRaidGroups = null;
     try {
       const [lootResp, rgResp] = await Promise.all([
         apiFetch('/api/tmb/loot' + (forceRefresh ? '?refresh=1' : '')),
@@ -711,17 +724,45 @@
       if (lootResp.ok) tmbLoot = await lootResp.json();
       if (rgResp.ok) tmbRaidGroups = await rgResp.json();
     } catch (e) { console.warn('TMB fetch failed:', e); }
-
-    // Store TMB data for progression use
     window._tmbAttendance = tmbData;
     window._tmbLoot = tmbLoot;
     window._tmbRaidGroups = tmbRaidGroups;
 
-    // Render report tables (load fights for recent reports)
-    await renderReportTables('#reports-25-mon', reports25Mon, '#no-reports-25-mon', true);
-    await renderReportTables('#reports-25-tue', reports25Tue, '#no-reports-25-tue', true, missingTue);
-    await renderReportTables('#reports-25-thu', reports25Thu, '#no-reports-25-thu', true, missingThu);
-    await renderReportTables('#reports-10', reports10, '#no-reports-10');
+    // Cards-Container dynamisch befüllen
+    const cardsHost = $('#raid-day-cards');
+    if (cardsHost) {
+      cardsHost.innerHTML = cardEntries.map((e, i) => {
+        const dayName = e.dayOfWeek ? DAY_NAMES_DE[e.dayOfWeek] : 'Alle Tage';
+        const trackLabel = e.track === 'legacy' ? ' <small class="text-muted">(Altcontent)</small>' : '';
+        return `<div class="raid-card">
+          <div class="raid-card-header">
+            <span class="raid-card-icon">&#9876;</span>
+            <span>${e.raidSize}-Man — ${escapeHtml(dayName)}${trackLabel}</span>
+          </div>
+          <div class="raid-card-body">
+            <div id="reports-card-${i}"></div>
+            <p id="no-reports-card-${i}" class="text-muted hidden">Keine ${escapeHtml(dayName)}-Reports gefunden.</p>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    for (let i = 0; i < cardEntries.length; i++) {
+      await renderReportTables(`#reports-card-${i}`, bucketed.get(i) || [], `#no-reports-card-${i}`, true, missingByCardIdx.get(i));
+    }
+
+    // Übrige Raid-Sizes (die nicht in raidSchedule sind) → eigene Cards
+    const otherHost = $('#raid-other-cards');
+    if (otherHost) {
+      // 10-Man Default-Card (immer anzeigen wenn 10er Reports existieren und 10er nicht in schedule)
+      let html = '';
+      if (unmatched10.length && !sizesInSchedule.has(10)) {
+        html += `<div class="raid-card" style="margin-top:24px"><div class="raid-card-header"><span class="raid-card-icon">&#9876;</span><span>10-Man Raids</span></div><div class="raid-card-body"><div id="reports-other-10"></div><p id="no-reports-other-10" class="text-muted hidden">Keine 10er Reports gefunden.</p></div></div>`;
+      }
+      otherHost.innerHTML = html;
+      if (unmatched10.length && !sizesInSchedule.has(10)) {
+        await renderReportTables('#reports-other-10', unmatched10, '#no-reports-other-10');
+      }
+    }
     hide('#section-other');
   }
 
@@ -4251,9 +4292,10 @@
     if (adminRole === 'superadmin') loadAdminUsers();
   }
 
-  // ─── Admin: Allgemein (Branding + TMB + Faction) ───
+  // ─── Admin: Allgemein (Branding + TMB + Faction + Zone-Klassifikation) ───
   async function loadGeneralSettings() {
     if (!$('#set-appName')) return;
+    let currentZones = [], legacyZones = [];
     try {
       const r = await apiFetch('/api/settings');
       const s = await r.json();
@@ -4266,7 +4308,10 @@
       $('#set-tmbGuildSlug').value = s.tmbGuildSlug || '';
       $('#set-tmbCookie').value = '';
       $('#set-tmbCookie').placeholder = s.tmbCookie ? '(gesetzt — leerlassen um zu behalten)' : 'laravel_session=...';
+      try { currentZones = JSON.parse(s.currentZones || '[]').map(Number); } catch (_) {}
+      try { legacyZones = JSON.parse(s.legacyZones || '[]').map(Number); } catch (_) {}
     } catch (_) {}
+    renderZoneClassification(currentZones, legacyZones);
     const btn = $('#btn-save-general');
     if (btn && !btn._wired) {
       btn._wired = true;
@@ -4279,6 +4324,8 @@
           faction: $('#set-faction').value,
           tmbGuildId: $('#set-tmbGuildId').value.trim(),
           tmbGuildSlug: $('#set-tmbGuildSlug').value.trim(),
+          currentZones: JSON.stringify(collectZoneClassification('current')),
+          legacyZones: JSON.stringify(collectZoneClassification('legacy')),
         };
         const tmbC = $('#set-tmbCookie').value.trim();
         if (tmbC) body.tmbCookie = tmbC;
@@ -4290,6 +4337,39 @@
         } catch (e) { msg.textContent = '✗ Fehler: ' + e.message; msg.style.color = '#f87171'; }
       });
     }
+  }
+  function renderZoneClassification(currentZones, legacyZones) {
+    const host = $('#zone-classification');
+    if (!host) return;
+    const zones = CLA_DATA.zones;
+    // Sort TBC zones by tier desc, then ID
+    const zoneEntries = Object.entries(zones)
+      .filter(([, z]) => z.tbc)
+      .sort((a, b) => (b[1].tier || 0) - (a[1].tier || 0) || a[0] - b[0]);
+    const curSet = new Set(currentZones.map(Number));
+    const legSet = new Set(legacyZones.map(Number));
+    host.innerHTML = `<table class="results-table"><thead><tr><th>Zone</th><th>Tier</th><th>Klassifikation</th></tr></thead><tbody>${
+      zoneEntries.map(([zid, z]) => {
+        const id = Number(zid);
+        const cls = curSet.has(id) ? 'current' : legSet.has(id) ? 'legacy' : (z.tier >= 5 ? 'current' : 'legacy');
+        return `<tr>
+          <td>${escapeHtml(z.name)} <small class="text-muted">(${z.short})</small></td>
+          <td>T${z.tier}</td>
+          <td><select data-zid="${id}" class="zone-class-select">
+            <option value="auto"${(!curSet.has(id) && !legSet.has(id)) ? ' selected' : ''}>Auto (Tier-Heuristik: ${z.tier >= 5 ? 'current' : 'legacy'})</option>
+            <option value="current"${curSet.has(id) ? ' selected' : ''}>Current</option>
+            <option value="legacy"${legSet.has(id) ? ' selected' : ''}>Legacy</option>
+          </select></td>
+        </tr>`;
+      }).join('')
+    }</tbody></table>`;
+  }
+  function collectZoneClassification(which) {
+    const out = [];
+    document.querySelectorAll('.zone-class-select').forEach(sel => {
+      if (sel.value === which) out.push(Number(sel.dataset.zid));
+    });
+    return out;
   }
 
   // ─── Admin: Raid-Schedule ───
