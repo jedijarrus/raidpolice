@@ -70,7 +70,6 @@ temp/
 *.bak
 
 # ── Project-spezifisch ──
-DOCUMENTATION.md
 DOCUMENTATION-private.md
 *-snapshot.md
 robots.txt
