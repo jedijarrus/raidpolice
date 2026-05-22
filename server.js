@@ -2155,17 +2155,28 @@ server.listen(PORT, () => {
     // Manueller Trigger aus dem Admin-Bereich
     if (manualLiveUntil > Date.now()) return true;
 
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-    const day = now.getDay(); // 0=Sun, 1=Mon, 2=Tue, 4=Thu, 5=Fri
-    const h = now.getHours(), m = now.getMinutes();
+    // Schedule aus den Settings lesen
+    let schedule = [];
+    try { schedule = JSON.parse(cache.getSetting('raidSchedule') || '[]'); } catch (_) {}
+    if (!Array.isArray(schedule) || !schedule.length) return false;
 
-    // Raid-Schedule: Mo/Di/Do 19:30 → 01:00 (Berlin) + Di/Mi/Fr-Overflow
-    const isRaidDay = (day === 1 || day === 2 || day === 4);
-    const isOverflow = ((day === 2 || day === 3 || day === 5) && h < 1);
-    if (!isRaidDay && !isOverflow) return false;
-    if (isRaidDay && (h > 19 || (h === 19 && m >= 30))) return true;
-    if (isRaidDay && h < 1) return true;
-    if (isOverflow) return true;
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
+    const day = now.getDay() === 0 ? 7 : now.getDay(); // ISO 1=Mo..7=So
+    const h = now.getHours(), m = now.getMinutes();
+    const minutesNow = h * 60 + m;
+
+    // Match: heute oder gestern (Overflow) — wenn aktuelle Uhrzeit innerhalb
+    // [startTime, startTime + 5.5h] des Eintrags liegt.
+    const WINDOW_MIN = 5 * 60 + 30; // 5h 30min (19:30 → 01:00)
+    for (const s of schedule) {
+      const [sh, sm] = (s.startTime || '19:30').split(':').map(Number);
+      const startMin = sh * 60 + (sm || 0);
+      // Heute, vor Mitternacht
+      if (s.dayOfWeek === day && minutesNow >= startMin && minutesNow < startMin + WINDOW_MIN) return true;
+      // Gestern, nach Mitternacht (Overflow) — heute ist day, also gestern war (day-1) bzw. 7 wenn day=1
+      const prevDay = day === 1 ? 7 : day - 1;
+      if (s.dayOfWeek === prevDay && (minutesNow + 24 * 60) >= startMin && (minutesNow + 24 * 60) < startMin + WINDOW_MIN) return true;
+    }
     return false;
   }
 
@@ -2192,11 +2203,18 @@ server.listen(PORT, () => {
       const now = Date.now();
       const sixHoursAgo = now - 6 * 60 * 60 * 1000;
 
-      // Find active 25-man raid
+      // Aus raidSchedule die erwarteten Raid-Größen ableiten (Default: 25)
+      let expectedSizes = new Set();
+      try {
+        const sched = JSON.parse(cache.getSetting('raidSchedule') || '[]');
+        for (const s of (sched || [])) if (s.raidSize) expectedSizes.add(Number(s.raidSize));
+      } catch (_) {}
+      if (!expectedSizes.size) expectedSizes.add(25);
+
       const live25 = reports.filter(r => {
         if (r.start < sixHoursAgo) return false;
         const zone = preanalyze.CLA_DATA?.zones?.[r.zone];
-        return zone && zone.size === 25;
+        return zone && expectedSizes.has(zone.size);
       });
 
       if (!live25.length) {
@@ -2291,5 +2309,5 @@ server.listen(PORT, () => {
   setInterval(pollLiveRaid, LIVE_POLL_MS);
   // Initial poll after 5s
   setTimeout(pollLiveRaid, 5000);
-  console.log('Live ticker polling active (every 60s, Tu/Th 19:30-01:00)');
+  console.log('Live ticker polling active (every 60s, schedule from raidSchedule setting)');
 });

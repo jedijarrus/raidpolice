@@ -2631,14 +2631,18 @@
       const tmbCharsByDayKey = new Map();
       const tmbBenchedByDayKey = new Map(); // dayKey → Set<name> (explicitly benched in TMB)
       const tmbData = window._tmbAttendance;
-      // Track-Filter für TMB-Raids: Legacy = nur Montag, Current = alles außer Montag
+      // Track-Filter für TMB-Raids: aus raidSchedule den passenden Eintrag suchen,
+      // dessen track-Feld nutzen. Kein dayOfWeek-Match → Fallback auf 'current'.
       const currentTrack = window._progressionTrack || 'current';
+      const _sched = (window._branding && Array.isArray(window._branding.raidSchedule)) ? window._branding.raidSchedule : [];
       function tmbRaidMatchesTrack(d) {
         const berlin = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
         const adj = new Date(berlin);
         if (adj.getHours() < 5) adj.setDate(adj.getDate() - 1);
-        const isMonday = adj.getDay() === 1;
-        return currentTrack === 'legacy' ? isMonday : !isMonday;
+        const dow = adj.getDay() === 0 ? 7 : adj.getDay();
+        const entry = _sched.find(s => s.dayOfWeek === dow);
+        const tmbTrack = entry ? (entry.track || 'current') : 'current';
+        return tmbTrack === currentTrack;
       }
       if (tmbData && tmbData.raids) {
         for (const raid of tmbData.raids) {
