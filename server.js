@@ -745,6 +745,116 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // ─── Admin: Manuelle Reports (für Logs, die nicht unter der Gilde laufen) ───
+  if (parsed.pathname === '/api/admin/manual-reports' && req.method === 'GET') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ reports: cache.getManualReports() }));
+    return;
+  }
+  if (parsed.pathname === '/api/admin/manual-reports' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      const raw = String(body.input || '').trim();
+      if (!raw) { res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Kein Report-Code/URL angegeben' })); return; }
+      // Code aus URL extrahieren oder direkt verwenden
+      let code = raw;
+      const m = raw.match(/reports\/(?:a:)?([a-zA-Z0-9]+)/);
+      if (m) code = m[1];
+      if (!/^[a-zA-Z0-9]{8,32}$/.test(code)) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'Ungültiger Report-Code (erwartet 8-32 Zeichen alphanumerisch)' }));
+        return;
+      }
+      // Report-Metadaten von WCL holen
+      const preanalyze = require('./preanalyze');
+      let fightData;
+      try {
+        fightData = await preanalyze.wclApi(`/report/fights/${code}`, {}, { nocache: true });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'WCL konnte Report nicht laden: ' + e.message }));
+        return;
+      }
+      const fights = fightData.fights || [];
+      const lastFight = fights.length ? fights[fights.length - 1] : null;
+      const startTs = fightData.start || (fights.length ? fights[0].start_time : 0);
+      const endTs = fightData.end || (lastFight ? (startTs + (lastFight.end_time || 0)) : 0);
+      const session = getSession(req);
+      cache.addManualReport({
+        report_code: code,
+        title: fightData.title || raw,
+        owner: fightData.owner || null,
+        zone_id: fightData.zone || (fights[0] && fights[0].zoneID) || null,
+        start_ts: startTs,
+        end_ts: endTs,
+        added_by: session ? session.username : null,
+        note: body.note || null,
+      });
+      // Spiegel-Eintrag in den guild_reports_cache mergen, damit das Frontend ihn sofort sieht
+      try {
+        const guildName = cache.getSetting('guildName');
+        const serverName = cache.getSetting('serverName');
+        const region = cache.getSetting('region') || cache.getSetting('serverRegion');
+        if (guildName && serverName && region) {
+          const guildKey = `${guildName}/${serverName}/${region}`;
+          const cached = cache.getGuildReportsCache(guildKey);
+          const list = cached ? JSON.parse(cached.reports_json) : [];
+          if (!list.some(r => r.id === code)) {
+            list.unshift({
+              id: code,
+              title: fightData.title || raw,
+              owner: fightData.owner || null,
+              zone: fightData.zone || (fights[0] && fights[0].zoneID) || 0,
+              start: startTs,
+              end: endTs,
+              manual: true,
+            });
+            cache.putGuildReportsCache(guildKey, JSON.stringify(list));
+          }
+        }
+      } catch (_) {}
+      logAction(req, 'manual_report_add', code);
+      // Pre-Analyse anstoßen (async, blockt die Response nicht)
+      preanalyze.processReport(code).catch(e => console.error('[MANUAL] preanalyze error:', e.message));
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true, code, title: fightData.title, zone: fightData.zone, start: startTs }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (parsed.pathname.startsWith('/api/admin/manual-reports/') && req.method === 'DELETE') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    const code = parsed.pathname.substring('/api/admin/manual-reports/'.length);
+    if (!/^[a-zA-Z0-9]{8,32}$/.test(code)) {
+      res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Ungültiger Code' }));
+      return;
+    }
+    cache.removeManualReport(code);
+    // Auch aus dem gespiegelten guild_reports_cache entfernen
+    try {
+      const guildName = cache.getSetting('guildName');
+      const serverName = cache.getSetting('serverName');
+      const region = cache.getSetting('region') || cache.getSetting('serverRegion');
+      if (guildName && serverName && region) {
+        const guildKey = `${guildName}/${serverName}/${region}`;
+        const cached = cache.getGuildReportsCache(guildKey);
+        if (cached) {
+          const list = JSON.parse(cached.reports_json).filter(r => !(r.id === code && r.manual));
+          cache.putGuildReportsCache(guildKey, JSON.stringify(list));
+        }
+      }
+    } catch (_) {}
+    logAction(req, 'manual_report_remove', code);
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   // ─── Admin: Tracking-Config (welche Spells/Items werden aktuell getrackt) ───
   if (parsed.pathname === '/api/admin/tracking-config' && req.method === 'GET') {
     if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
@@ -1012,6 +1122,7 @@ async function handleRequest(req, res) {
           reanalyzeStatus: job || null,
           track: trackOverrides[r.id] || progression.getDefaultTrackForReport(r),
           trackOverride: !!trackOverrides[r.id],
+          manual: !!r.manual,
         };
       });
 
@@ -2289,7 +2400,27 @@ server.listen(PORT, () => {
 
       // Fetch guild reports (bypass cache for freshness)
       const reportsRaw = await preanalyze.wclApi(`/reports/guild/${encodeURIComponent(guildName)}/${encodeURIComponent(serverName)}/${region}`, {}, { nocache: true });
-      const reports = Array.isArray(reportsRaw) ? reportsRaw : [];
+      const reports = Array.isArray(reportsRaw) ? reportsRaw.slice() : [];
+
+      // Manuelle Reports als Kandidaten mit aufnehmen — frischen Stand von WCL holen
+      try {
+        const manuals = cache.getManualReports();
+        const known = new Set(reports.map(r => r.id));
+        for (const m of manuals) {
+          if (known.has(m.report_code)) continue;
+          try {
+            const fd = await preanalyze.wclApi(`/report/fights/${m.report_code}`, {}, { nocache: true });
+            const fights = fd.fights || [];
+            const last = fights.length ? fights[fights.length - 1] : null;
+            const startTs = fd.start || (fights.length ? fights[0].start_time : m.start_ts);
+            const endTs = fd.end || (last ? (startTs + (last.end_time || 0)) : m.end_ts);
+            reports.push({ id: m.report_code, title: fd.title || m.title, zone: fd.zone || m.zone_id, start: startTs, end: endTs, manual: true });
+          } catch (_) {
+            // Fallback: gespeicherte Metadaten
+            reports.push({ id: m.report_code, title: m.title, zone: m.zone_id, start: m.start_ts, end: m.end_ts, manual: true });
+          }
+        }
+      } catch (_) {}
 
       const now = Date.now();
       const sixHoursAgo = now - 6 * 60 * 60 * 1000;

@@ -792,23 +792,60 @@
     // Group by date+zone for 25-man (split logs of the SAME raid get merged,
     // aber unterschiedliche Zones am gleichen Tag bleiben separat), oder
     // keep individual for 10-man.
+    // ZUSÄTZLICH: zwei Raids derselben Zone am gleichen Tag werden getrennt
+    // wenn beide einen Kill des selben Bosses enthalten (z.B. 2× Gruul/Mag
+    // hintereinander) ODER wenn der Zeitabstand zwischen den Reports > 90 min
+    // beträgt (split-Logs sind typischerweise nur Sekunden auseinander).
     const rows = [];
     if (groupByDate) {
-      // Per-Zone-Sub-Grouping: gleiche Zone + gleicher Tag → ein Eintrag
-      const allGroups = [];
-      const byKey = new Map();
+      const RAID_GAP_THRESHOLD_MS = 90 * 60 * 1000;
+      // 1) coarse: gleicher Tag + gleiche Zone
+      const coarseByKey = new Map();
+      const coarseGroups = [];
       for (const r of reports) {
         const d = new Date(r.start);
         const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const key = `${dateKey}|${r.zone}`;
-        if (!byKey.has(key)) {
-          const g = { dateKey, reports: [], start: r.start, zone: r.zone };
-          byKey.set(key, g);
-          allGroups.push(g);
+        if (!coarseByKey.has(key)) {
+          const g = { dateKey, reports: [], zone: r.zone };
+          coarseByKey.set(key, g);
+          coarseGroups.push(g);
         }
-        const g = byKey.get(key);
-        g.reports.push(r);
-        if (r.start < g.start) g.start = r.start;
+        coarseByKey.get(key).reports.push(r);
+      }
+      // 2) split jede coarse-Gruppe in Sub-Raids anhand Kill-Konflikten + Zeit-Gap
+      const allGroups = [];
+      for (const coarse of coarseGroups) {
+        const sorted = coarse.reports.slice().sort((a, b) => a.start - b.start);
+        let current = null;
+        for (const r of sorted) {
+          const fights = fightMap.get(r.id) || [];
+          const killBosses = new Set(fights.filter(f => f.kill).map(f => f.boss));
+          const reportEnd = r.end || (r.start + (Math.max(...fights.map(f => f.end_time || 0), 0)));
+          let mustSplit = false;
+          if (current) {
+            // Kill-Konflikt: gleicher Boss bereits gekillt in current
+            for (const b of killBosses) {
+              if (current.killedBosses.has(b)) { mustSplit = true; break; }
+            }
+            // Zeit-Gap zu groß
+            if (!mustSplit && (r.start - current.endTime) > RAID_GAP_THRESHOLD_MS) {
+              mustSplit = true;
+            }
+          }
+          if (!current || mustSplit) {
+            current = {
+              dateKey: coarse.dateKey, zone: coarse.zone,
+              reports: [], start: r.start, endTime: reportEnd,
+              killedBosses: new Set(),
+            };
+            allGroups.push(current);
+          }
+          current.reports.push(r);
+          if (r.start < current.start) current.start = r.start;
+          if (reportEnd > current.endTime) current.endTime = reportEnd;
+          for (const b of killBosses) current.killedBosses.add(b);
+        }
       }
       const dayGroups = allGroups;
       dayGroups.sort((a, b) => b.start - a.start);
@@ -4304,7 +4341,7 @@
   function loadAllAdmin() {
     loadAdminReports(); loadAdminPenalties(); loadAdminRevoked(); loadAdminExcused(); loadAdminExcusedPlayers(); loadAdminExcludedPlayers(); loadAdminPlayerRoles(); loadAdminJoinDates(); loadAdminChangelog(); loadSysinfo(); loadRaidDateDropdowns();
     loadDataStatus(); loadPipelineStatus(); loadElixirPolicyEditor(); loadTrackingConfig();
-    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl();
+    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl(); loadManualReports();
     if (adminRole === 'superadmin') loadAdminUsers();
   }
 
@@ -4586,6 +4623,76 @@
         } catch (e) { status.textContent = '✗ ' + e.message; }
       });
     }
+  }
+
+  // ─── Admin: Manuelle Reports ───
+  async function loadManualReports() {
+    const tbody = $('#manual-reports-body');
+    const input = $('#manual-report-input');
+    const btnAdd = $('#btn-manual-report-add');
+    const status = $('#manual-report-status');
+    if (!tbody || !input || !btnAdd) return;
+
+    async function refresh() {
+      try {
+        const r = await apiFetch('/api/admin/manual-reports');
+        const j = await r.json();
+        const list = j.reports || [];
+        if (!list.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Keine manuellen Reports.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list.map(m => {
+          const date = m.start_ts ? new Date(m.start_ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+          return `<tr>
+            <td><code><a href="https://classic.warcraftlogs.com/reports/${escapeHtml(m.report_code)}" target="_blank" rel="noopener">${escapeHtml(m.report_code)}</a></code></td>
+            <td>${escapeHtml(m.title || '—')}</td>
+            <td>${escapeHtml(m.owner || '—')}</td>
+            <td>${escapeHtml(date)}</td>
+            <td>${escapeHtml(m.added_by || '—')}</td>
+            <td><button class="penalty-btn penalty-btn--remove" data-manual-del="${escapeHtml(m.report_code)}">Entfernen</button></td>
+          </tr>`;
+        }).join('');
+        tbody.querySelectorAll('[data-manual-del]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const code = btn.getAttribute('data-manual-del');
+            if (!confirm('Manuellen Report ' + code + ' entfernen?')) return;
+            try {
+              const r = await apiFetch('/api/admin/manual-reports/' + encodeURIComponent(code), { method: 'DELETE' });
+              if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Fehler'); }
+              await refresh();
+            } catch (e) { status.textContent = '✗ ' + e.message; }
+          });
+        });
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Fehler: ' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    if (!btnAdd._wired) {
+      btnAdd._wired = true;
+      btnAdd.addEventListener('click', async () => {
+        const val = (input.value || '').trim();
+        if (!val) return;
+        status.textContent = 'Lade von WCL...';
+        try {
+          const r = await apiFetch('/api/admin/manual-reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ input: val })
+          });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || 'Fehler');
+          status.innerHTML = '<span style="color:#4ade80">✓ Hinzugefügt: ' + escapeHtml(j.title || j.code) + ' — Pre-Analyse läuft im Hintergrund.</span>';
+          input.value = '';
+          await refresh();
+        } catch (e) {
+          status.textContent = '✗ ' + e.message;
+        }
+      });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnAdd.click(); });
+    }
+    refresh();
   }
 
   // ─── Admin: Easter Eggs ───

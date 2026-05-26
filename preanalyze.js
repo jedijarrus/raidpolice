@@ -3143,6 +3143,25 @@ async function checkAndAnalyzeNewReports() {
   try {
     const reports = await wclApi(`/reports/guild/${encodeURIComponent(guildName)}/${encodeURIComponent(serverName)}/${encodeURIComponent(region)}`);
 
+    // Manuelle Reports mergen, damit sie beim Refresh nicht aus dem Cache verschwinden
+    try {
+      const manuals = cache.getManualReports();
+      const known = new Set(reports.map(r => r.id));
+      for (const m of manuals) {
+        if (!known.has(m.report_code)) {
+          reports.unshift({
+            id: m.report_code,
+            title: m.title || m.report_code,
+            owner: m.owner || null,
+            zone: m.zone_id || 0,
+            start: m.start_ts || 0,
+            end: m.end_ts || 0,
+            manual: true,
+          });
+        }
+      }
+    } catch (_) {}
+
     // Store guild reports for frontend
     const guildKey = `${guildName}/${serverName}/${region}`;
     cache.putGuildReportsCache(guildKey, JSON.stringify(reports));

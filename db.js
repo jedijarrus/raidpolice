@@ -154,6 +154,17 @@ function initSchema() {
       set_by TEXT,
       set_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS manual_reports (
+      report_code TEXT PRIMARY KEY,
+      title TEXT,
+      owner TEXT,
+      zone_id INTEGER,
+      start_ts INTEGER,
+      end_ts INTEGER,
+      added_by TEXT,
+      added_at INTEGER NOT NULL,
+      note TEXT
+    );
   `);
   // Migrations: add created_by columns to tables that were created without them
   safeAddColumn('attendance_penalties', 'created_by', 'TEXT');
@@ -520,6 +531,28 @@ function clearReportTrack(reportCode) {
   d.prepare('DELETE FROM report_tracks WHERE report_code = ?').run(reportCode);
 }
 
+// ─── Manual reports (admin-added codes for non-guild logs) ───
+function getManualReports() {
+  const d = getDb();
+  return d.prepare('SELECT report_code, title, owner, zone_id, start_ts, end_ts, added_by, added_at, note FROM manual_reports ORDER BY start_ts DESC').all();
+}
+function getManualReport(reportCode) {
+  const d = getDb();
+  return d.prepare('SELECT report_code, title, owner, zone_id, start_ts, end_ts, added_by, added_at, note FROM manual_reports WHERE report_code = ?').get(reportCode) || null;
+}
+function addManualReport(rec) {
+  const d = getDb();
+  d.prepare(`INSERT OR REPLACE INTO manual_reports
+    (report_code, title, owner, zone_id, start_ts, end_ts, added_by, added_at, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(rec.report_code, rec.title || null, rec.owner || null, rec.zone_id || null,
+         rec.start_ts || 0, rec.end_ts || 0, rec.added_by || null, Date.now(), rec.note || null);
+}
+function removeManualReport(reportCode) {
+  const d = getDb();
+  d.prepare('DELETE FROM manual_reports WHERE report_code = ?').run(reportCode);
+}
+
 module.exports = {
   getDb, cacheKey, getTTL, getCached, putCache,
   invalidateReport, invalidateGuild, getCacheStats,
@@ -542,4 +575,5 @@ module.exports = {
   getBugTickets, createBugTicket, updateBugTicketStatus, deleteBugTicket,
   getComputedView, putComputedView, invalidateComputedView,
   getReportTrackOverride, getAllReportTracks, setReportTrack, clearReportTrack,
+  getManualReports, getManualReport, addManualReport, removeManualReport,
 };

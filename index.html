@@ -728,6 +728,30 @@
               </table>
             </div>
           </div>
+
+          <div class="penalty-card penalty-card--info" style="grid-column: 1 / -1">
+            <div class="penalty-card__header">
+              <div class="penalty-card__icon">&#128206;</div>
+              <div>
+                <h3 class="penalty-card__title">Manuelle Reports</h3>
+                <p class="penalty-card__desc">WCL-Logs, die nicht unter der Gilde stehen — werden in Auswertung &amp; Live-Ticker mit aufgenommen.</p>
+              </div>
+            </div>
+            <div class="penalty-card__form">
+              <div class="penalty-field penalty-field--grow">
+                <label class="penalty-label">Report-URL oder Code</label>
+                <input type="text" id="manual-report-input" class="penalty-input" placeholder="https://classic.warcraftlogs.com/reports/abc123XYZ oder abc123XYZ">
+              </div>
+              <button id="btn-manual-report-add" class="penalty-btn penalty-btn--add">Hinzufügen</button>
+            </div>
+            <div id="manual-report-status" class="penalty-card__status"></div>
+            <div class="penalty-card__table-wrap">
+              <table class="penalty-table">
+                <thead><tr><th>Code</th><th>Titel</th><th>Owner</th><th>Start</th><th>Hinzugefügt von</th><th></th></tr></thead>
+                <tbody id="manual-reports-body"><tr><td colspan="6" class="text-muted">Lade...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <h3 class="actions-group-header">Live-Ticker</h3>
@@ -950,6 +974,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=152"></script>
+  <script src="js/app.js?v=154"></script>
 </body>
 </html>
