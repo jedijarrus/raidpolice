@@ -1856,8 +1856,8 @@
           // Weapon Enh - show name if available; DW shows MH/OH separately
           let weaponCell = '<span class="buff-miss">—</span>';
           if (fd && fd.weaponEnh) {
-            if (fd.weaponEnh?.wfWeave) {
-              weaponCell = '<span class="buff-ok" title="Hunter melee-weaved mit Windfury aktiv — Sharpening Stone nicht nötig">Melee+WF</span>';
+            if (fd.weaponEnh?.weave) {
+              weaponCell = '<span class="buff-ok" title="Hunter melee-weaved mit Raptor Strike — Sharpening Stone nicht nötig">Raptor-Weave</span>';
             } else if (fd.weaponEnh?.isDW) {
               const mhStr = fd.weaponEnh.mh ? `<span class="buff-ok">${escapeHtml(fd.weaponEnh.mh)}</span>` : '<span class="buff-miss">—</span>';
               const ohStr = fd.weaponEnh.oh ? `<span class="buff-ok">${escapeHtml(fd.weaponEnh.oh)}</span>` : '<span class="buff-miss">—</span>';

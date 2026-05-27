@@ -417,6 +417,9 @@ const EXCLUDED_TEMP_ENCHANTS = [4264,263,264,265,266];
 const WF_TOTEM_TEMP_ENCHANTS = [2639,2638,2636];
 const WF_BUFF_AURAS = [25584,25583];
 const WF_ATTACK_DAMAGE_IDS = [25584,25583]; // Windfury Attack Damage-Proc Spell-IDs
+// Raptor Strike (alle Ränge) — aktive Hunter-Melee-Ability, deutlichster Indikator für bewusstes Weaving
+const RAPTOR_STRIKE_IDS = [2973,14260,14261,14262,14263,14264,14265,14266,27014];
+const HUNTER_WEAVE_MIN_HITS = 3; // ab so vielen Raptor-Strike-Hits gilt der Hunter als Weaver
 const MELEE_CLASSES = ['Warrior','Rogue','Paladin'];
 const CASTER_CLASSES = ['Mage','Warlock','Priest'];
 const SPELL_HIT_ENCHANTS = [3002,2935];
@@ -923,22 +926,29 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
     return { flask: null, battleElixir: battle, guardianElixir: guardian };
   }
 
-  // Hunter melee-weave + Windfury-Detection (report-wide, 1 Call pro Hunter).
-  // Wenn ein Hunter Windfury-Attack-Damage-Events hat, hat er melee geweaved
-  // UND WF war aktiv → Weapon-Enhancement-Check wird übersprungen.
-  const hunterWeavesWf = new Set();
+  // Hunter Melee-Weave-Detection: Raptor Strike ist die deutlichste aktive
+  // Melee-Ability. Wenn ein Hunter Raptor-Strike-Hits hat (≥ Schwellwert),
+  // gilt er als bewusster Weaver → Weapon-Enhancement-Check entfällt.
+  // Pro Hunter ein damage-done-Call für die Fights, in denen er hits hatte.
+  const hunterWeaveFights = new Map(); // playerName -> Set<fightIdx>
   for (let pi = 0; pi < totalPlayers; pi++) {
     const player = playerList[pi];
     if (player.type !== 'Hunter') continue;
-    try {
-      const resp = await wclApi(`/report/tables/damage-done/${reportCode}`, {
-        start: 0, end: 9999999999, sourceid: player.id, translate: true
-      }, { nocache: true });
-      const entries = resp.entries || [];
-      if (entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0)) {
-        hunterWeavesWf.add(player.name);
-      }
-    } catch (_) {}
+    const weavedSet = new Set();
+    for (let fi = 0; fi < totalFights; fi++) {
+      const f = bossFights[fi];
+      try {
+        const resp = await wclApi(`/report/tables/damage-done/${reportCode}`, {
+          start: f.start_time, end: f.end_time, sourceid: player.id, translate: true
+        }, { nocache: true });
+        const entries = resp.entries || [];
+        const rs = entries.find(e => RAPTOR_STRIKE_IDS.includes(e.guid));
+        if (rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS) {
+          weavedSet.add(fi);
+        }
+      } catch (_) {}
+    }
+    if (weavedSet.size) hunterWeaveFights.set(player.name, weavedSet);
   }
 
   const results = [];
@@ -1005,10 +1015,12 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
 
       const weDetail = getPlayerDetailMap(summaries[fi])[player.name];
       const weResult = detectWeaponEnhancement(weDetail, player.type, auras);
-      // Hunter mit Melee-Weave + WF: WE-Check entfällt
-      const isWeavingHunter = player.type === 'Hunter' && hunterWeavesWf.has(player.name);
+      // Hunter mit Raptor-Strike-Weave auf diesem Fight: WE-Check entfällt
+      const isWeavingHunter = player.type === 'Hunter'
+        && hunterWeaveFights.has(player.name)
+        && hunterWeaveFights.get(player.name).has(fi);
       if (hasWeaponEnh(weResult) || isWeavingHunter) playerResult.weaponEnhancement++;
-      fightDetail.weaponEnh = isWeavingHunter ? { wfWeave: true } : formatWeaponEnh(weResult);
+      fightDetail.weaponEnh = isWeavingHunter ? { weave: true } : formatWeaponEnh(weResult);
 
       playerResult.fightDetails.push(fightDetail);
     }
@@ -3395,17 +3407,17 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     }).catch(() => ({ entries: [] }))
   ));
 
-  // Hunter Melee-Weave + WF Detection — pro Hunter ein damage-done Call für den Fight.
-  // WF-Attack-Damage = Hunter swingt Melee UND WF-Totem droppt für ihn.
+  // Hunter Melee-Weave-Detection: Raptor-Strike-Hits ≥ Schwellwert im Fight.
   const liveHunterWeaves = new Set();
-  await Promise.all(players.map(async (p, idx) => {
+  await Promise.all(players.map(async (p) => {
     if (p.type !== 'Hunter') return;
     try {
       const dd = await wclApi(`/report/tables/damage-done/${reportCode}`, {
         start: fight.start_time, end: fight.end_time, sourceid: p.id, translate: true
       }, { nocache: true });
       const entries = dd.entries || [];
-      if (entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0)) {
+      const rs = entries.find(e => RAPTOR_STRIKE_IDS.includes(e.guid));
+      if (rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS) {
         liveHunterWeaves.add(p.name);
       }
     } catch (_) {}
