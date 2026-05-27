@@ -1856,7 +1856,9 @@
           // Weapon Enh - show name if available; DW shows MH/OH separately
           let weaponCell = '<span class="buff-miss">—</span>';
           if (fd && fd.weaponEnh) {
-            if (fd.weaponEnh?.isDW) {
+            if (fd.weaponEnh?.wfWeave) {
+              weaponCell = '<span class="buff-ok" title="Hunter melee-weaved mit Windfury aktiv — Sharpening Stone nicht nötig">Melee+WF</span>';
+            } else if (fd.weaponEnh?.isDW) {
               const mhStr = fd.weaponEnh.mh ? `<span class="buff-ok">${escapeHtml(fd.weaponEnh.mh)}</span>` : '<span class="buff-miss">—</span>';
               const ohStr = fd.weaponEnh.oh ? `<span class="buff-ok">${escapeHtml(fd.weaponEnh.oh)}</span>` : '<span class="buff-miss">—</span>';
               weaponCell = `MH: ${mhStr} / OH: ${ohStr}`;
@@ -5942,9 +5944,9 @@
           const e = bp[boss][role] || {};
           rows.push({
             boss, role,
-            flask: (e.flaskAllowed || []).join(','),
-            battle: (e.battleAllowed || []).join(','),
-            guardian: (e.guardianAllowed || []).join(','),
+            flask: new Set(e.flaskAllowed || []),
+            battle: new Set(e.battleAllowed || []),
+            guardian: new Set(e.guardianAllowed || []),
           });
         }
       }
@@ -5955,7 +5957,7 @@
     if (addBtn && !addBtn._wired) {
       addBtn._wired = true;
       addBtn.addEventListener('click', () => {
-        _bossPolicyState().push({ boss: KNOWN_BOSSES[0], role: 'Paladin:tank', flask: '', battle: '', guardian: '' });
+        _bossPolicyState().push({ boss: KNOWN_BOSSES[0], role: 'Paladin:tank', flask: new Set(), battle: new Set(), guardian: new Set() });
         renderBossPolicyRows();
       });
     }
@@ -5965,18 +5967,12 @@
       saveBtn.addEventListener('click', async () => {
         const status = $('#boss-policy-status');
         const out = {};
-        function parseIds(s) {
-          return (s || '').split(',').map(x => parseInt(x.trim(), 10)).filter(n => Number.isFinite(n));
-        }
         for (const row of _bossPolicyState()) {
           if (!row.boss || !row.role) continue;
           const entry = {};
-          const f = parseIds(row.flask);
-          const b = parseIds(row.battle);
-          const g = parseIds(row.guardian);
-          if (f.length) entry.flaskAllowed = f;
-          if (b.length) entry.battleAllowed = b;
-          if (g.length) entry.guardianAllowed = g;
+          if (row.flask.size) entry.flaskAllowed = [...row.flask];
+          if (row.battle.size) entry.battleAllowed = [...row.battle];
+          if (row.guardian.size) entry.guardianAllowed = [...row.guardian];
           if (!Object.keys(entry).length) continue;
           out[row.boss] = out[row.boss] || {};
           out[row.boss][row.role] = entry;
@@ -5994,35 +5990,53 @@
       });
     }
   }
+  function _bpCheckboxList(options, selected, cat, rowIdx) {
+    if (!options || !options.length) return '<span class="text-muted" style="font-size:0.85em">—</span>';
+    return `<div class="bp-checks">` + options.map(opt => {
+      const checked = selected.has(opt.id) ? ' checked' : '';
+      return `<label class="bp-check"><input type="checkbox"${checked} data-bp-cat="${cat}" data-bp-idx="${rowIdx}" data-bp-id="${opt.id}"> <span>${escapeHtml(opt.name)}</span></label>`;
+    }).join('') + `</div>`;
+  }
   function renderBossPolicyRows() {
     const tbody = $('#boss-policy-body');
     if (!tbody) return;
     const rows = _bossPolicyState();
     const roleOptions = Object.keys((_elixirPolicyState && _elixirPolicyState.policy) || {}).sort();
     if (!roleOptions.length) roleOptions.push('Paladin:tank');
+    const obs = (_elixirPolicyState && _elixirPolicyState.observed) || {};
+    const flasks = (obs.flasks || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    const battles = (obs.battleElixirs || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    const guardians = (obs.guardianElixirs || []).slice().sort((a, b) => a.name.localeCompare(b.name));
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Keine Sonderregeln definiert.</td></tr>'; return; }
     tbody.innerHTML = rows.map((row, i) => {
       const bossOpts = KNOWN_BOSSES.map(b => `<option value="${escapeHtml(b)}"${b === row.boss ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
       const roleOpts = roleOptions.map(r => `<option value="${escapeHtml(r)}"${r === row.role ? ' selected' : ''}>${escapeHtml(r)}</option>`).join('');
-      return `<tr>
+      return `<tr data-bp-row="${i}">
         <td><select class="penalty-input" data-bp-field="boss" data-bp-idx="${i}">${bossOpts}</select></td>
         <td><select class="penalty-input" data-bp-field="role" data-bp-idx="${i}">${roleOpts}</select></td>
-        <td><input class="penalty-input" data-bp-field="flask" data-bp-idx="${i}" value="${escapeHtml(row.flask)}" placeholder="17629,…" style="width:8em"></td>
-        <td><input class="penalty-input" data-bp-field="battle" data-bp-idx="${i}" value="${escapeHtml(row.battle)}" placeholder="" style="width:8em"></td>
-        <td><input class="penalty-input" data-bp-field="guardian" data-bp-idx="${i}" value="${escapeHtml(row.guardian)}" placeholder="" style="width:8em"></td>
+        <td>${_bpCheckboxList(flasks, row.flask, 'flask', i)}</td>
+        <td>${_bpCheckboxList(battles, row.battle, 'battle', i)}</td>
+        <td>${_bpCheckboxList(guardians, row.guardian, 'guardian', i)}</td>
         <td><button class="penalty-btn penalty-btn--remove" data-bp-del="${i}">×</button></td>
       </tr>`;
     }).join('');
-    tbody.querySelectorAll('[data-bp-field]').forEach(el => {
+    // Boss/Role dropdowns
+    tbody.querySelectorAll('select[data-bp-field]').forEach(el => {
       el.addEventListener('change', () => {
         const i = parseInt(el.getAttribute('data-bp-idx'), 10);
         const f = el.getAttribute('data-bp-field');
         if (rows[i]) rows[i][f] = el.value;
       });
-      el.addEventListener('input', () => {
-        const i = parseInt(el.getAttribute('data-bp-idx'), 10);
-        const f = el.getAttribute('data-bp-field');
-        if (rows[i]) rows[i][f] = el.value;
+    });
+    tbody.querySelectorAll('input[type=checkbox][data-bp-cat]').forEach(cb => {
+      const cat = cb.dataset.bpCat;
+      const idx = parseInt(cb.dataset.bpIdx, 10);
+      const id = parseInt(cb.dataset.bpId, 10);
+      cb.addEventListener('change', () => {
+        const row = rows[idx];
+        if (!row) return;
+        const set = row[cat];
+        if (cb.checked) set.add(id); else set.delete(id);
       });
     });
     tbody.querySelectorAll('[data-bp-del]').forEach(btn => {

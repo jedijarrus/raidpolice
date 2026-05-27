@@ -416,6 +416,7 @@ const EXCLUDED_WEAPON_ITEMS = [19022,19970,25978,6365,12225,6367,6366,6256];
 const EXCLUDED_TEMP_ENCHANTS = [4264,263,264,265,266];
 const WF_TOTEM_TEMP_ENCHANTS = [2639,2638,2636];
 const WF_BUFF_AURAS = [25584,25583];
+const WF_ATTACK_DAMAGE_IDS = [25584,25583]; // Windfury Attack Damage-Proc Spell-IDs
 const MELEE_CLASSES = ['Warrior','Rogue','Paladin'];
 const CASTER_CLASSES = ['Mage','Warlock','Priest'];
 const SPELL_HIT_ENCHANTS = [3002,2935];
@@ -922,6 +923,24 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
     return { flask: null, battleElixir: battle, guardianElixir: guardian };
   }
 
+  // Hunter melee-weave + Windfury-Detection (report-wide, 1 Call pro Hunter).
+  // Wenn ein Hunter Windfury-Attack-Damage-Events hat, hat er melee geweaved
+  // UND WF war aktiv → Weapon-Enhancement-Check wird übersprungen.
+  const hunterWeavesWf = new Set();
+  for (let pi = 0; pi < totalPlayers; pi++) {
+    const player = playerList[pi];
+    if (player.type !== 'Hunter') continue;
+    try {
+      const resp = await wclApi(`/report/tables/damage-done/${reportCode}`, {
+        start: 0, end: 9999999999, sourceid: player.id, translate: true
+      }, { nocache: true });
+      const entries = resp.entries || [];
+      if (entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0)) {
+        hunterWeavesWf.add(player.name);
+      }
+    } catch (_) {}
+  }
+
   const results = [];
   for (let pi = 0; pi < totalPlayers; pi++) {
     const player = playerList[pi];
@@ -986,8 +1005,10 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
 
       const weDetail = getPlayerDetailMap(summaries[fi])[player.name];
       const weResult = detectWeaponEnhancement(weDetail, player.type, auras);
-      if (hasWeaponEnh(weResult)) playerResult.weaponEnhancement++;
-      fightDetail.weaponEnh = formatWeaponEnh(weResult);
+      // Hunter mit Melee-Weave + WF: WE-Check entfällt
+      const isWeavingHunter = player.type === 'Hunter' && hunterWeavesWf.has(player.name);
+      if (hasWeaponEnh(weResult) || isWeavingHunter) playerResult.weaponEnhancement++;
+      fightDetail.weaponEnh = isWeavingHunter ? { wfWeave: true } : formatWeaponEnh(weResult);
 
       playerResult.fightDetails.push(fightDetail);
     }
@@ -3374,6 +3395,22 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     }).catch(() => ({ entries: [] }))
   ));
 
+  // Hunter Melee-Weave + WF Detection — pro Hunter ein damage-done Call für den Fight.
+  // WF-Attack-Damage = Hunter swingt Melee UND WF-Totem droppt für ihn.
+  const liveHunterWeaves = new Set();
+  await Promise.all(players.map(async (p, idx) => {
+    if (p.type !== 'Hunter') return;
+    try {
+      const dd = await wclApi(`/report/tables/damage-done/${reportCode}`, {
+        start: fight.start_time, end: fight.end_time, sourceid: p.id, translate: true
+      }, { nocache: true });
+      const entries = dd.entries || [];
+      if (entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0)) {
+        liveHunterWeaves.add(p.name);
+      }
+    } catch (_) {}
+  }));
+
   // Fetch consumable + trinket-use + major-CD cast events via V2 (combined filter)
   const combinedFilterIds = [...CONSUMABLE_CAST_FILTER_IDS, ...ONUSE_TRINKET_SPELL_IDS, ...LIVE_CD_FILTER_IDS];
   const filterStr = `ability.id IN (${combinedFilterIds.join(',')})`;
@@ -3475,10 +3512,11 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     if (!food && liveInferAura(pi, BUFF_SETS.foodBuff, LIVE_BUFF_DURATION_MS.foodBuff)) food = true;
     if (!food) buffIssues.push({ cat: 'Food', text: 'Fehlt' });
 
-    // Weapon Enhancement
+    // Weapon Enhancement — Hunter mit Melee-Weave + WF braucht keinen Stein
     const weDetail = getPlayerDetailMap(summary)[p.name];
     const weResult = detectWeaponEnhancement(weDetail, p.type, auras);
-    const weaponOk = hasWeaponEnh(weResult);
+    const isWeavingHunter = p.type === 'Hunter' && liveHunterWeaves.has(p.name);
+    const weaponOk = hasWeaponEnh(weResult) || isWeavingHunter;
     if (!weaponOk) {
       if (weResult.isDW) {
         const parts = [];
