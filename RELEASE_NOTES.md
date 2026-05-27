@@ -70,3 +70,68 @@ Die Konsequenzen pro Verstoßstufe können im Admin-Bereich frei formuliert werd
 
 ### Full Documentation (DOCUMENTATION.md)
 10 Sektionen: Overview, Erstkonfiguration, Dashboard, Report-Analyse-Module, Live-Ticker, Admin-Bereich, Architektur, API-Endpoints, Settings-Referenz, Game-Konstanten. TMB-Integration ist erklärt (Attendance/Loot/RaidGroups Exports).
+
+---
+
+## Foundation (vor 2026-05-22)
+
+Davor lag das Projekt im privaten Repo. Die nachfolgenden Features waren der Stand beim Initial-Commit ins Public-Repo am 22.05.2026.
+
+### Dashboard & Reports
+- Raid-Karten pro Wochentag mit Attendance-Übersicht und „letzter Raid"-Anzeige.
+- Reports-Liste mit Filter auf Tracks (current/legacy) und Auto-Dedup pro Tag+Zone.
+- Report-Detail-View mit Tabs: Fights, Buffs, Consumables, Gear, Spell-Ranks, Avoidable Damage, Trinkets, CDs, Analyse.
+- Spieler-Detail-Seite (`#player/<name>`) mit Historie, Gear-Snapshots, Roles, Penalties, Attendance.
+- Spieler-Entwicklung (Progression) mit Track-Toggle und Alt-Charakter-Merging.
+- Statistik-Tab: Aggregate über Spielerteilnahme, Kill-Quoten, Wipe-Häufigkeiten.
+
+### Live-Ticker
+- Echtzeit-Polling der WCL-Guild-Reports in konfigurierten Raid-Zeitfenstern (alle 60s).
+- Pro neuem Fight: Slacker-Detection für Buffs/Consumables/Trinkets/CDs, Gear-Issue-Übersicht.
+- Spalten-Layout mit Klassen-Farben, Live-Dot in der Tab-Nav wenn ein Raid läuft.
+- Manueller Start/Stop für Live-Window-Verlängerung außerhalb der Schedule-Slots.
+- Simulation-Modus: spielt einen gecachten Report als Live-Raid ab für Tests/Demos.
+
+### Report-Analyse Pipeline (Pre-Analyzer)
+12 sequentielle Module pro Report, cached pro `(report, type, settings_hash)`:
+- **Gear** — Enchants, Sockel-Gems (Rare/Epic), fehlende Verzauberungen, Klassen-spezifische Validierung.
+- **Buffs** — Flask/Battle-Elixir/Guardian-Elixir/Food/Weapon-Enhancement/Scrolls pro Spieler pro Fight, mit Report-wide Fallback für vor Report-Start aktivierte Buffs.
+- **Consumables** — Pots, Mana-Pots, Health-Pots, Runes, Engineering-Items, Sonstiges (Nightmare Seed etc.) — gezählt pro Spieler pro Fight.
+- **Spell-Ranks** — Erkennt nicht-Max-Rank-Casts (z.B. niedrige Heal-Ränge bei Healern, Flask-of-Distilled-Wisdom statt Spellpower etc.).
+- **Deaths** — Aggregierte Todeszählung pro Spieler über alle Fights.
+- **Damage/Healing** — Per-Fight DPS/HPS-Tabellen pro Spieler.
+- **Damage Taken** — Wer kassiert wie viel Schaden in welchem Fight, mit Ability-Breakdown.
+- **Drums** — Drum-of-Battle-Casts pro Leatherworker, Uptime-Berechnung.
+- **Avoidable Damage** — Boden-AoE, frontale Cones, Mechanic-Damage der ausweichbar gewesen wäre (Spell-ID-Liste pro Boss).
+- **Wipes (Tier 1+2+3)** — Mehrschichtige Wipe-Ursachen-Analyse: Stuck-Detection, Death-Cascade, Boss-Mechanic-Misses, Slacker-Boxen mit Headlines.
+- **Trinkets (On-Use)** — Wer benutzt seine On-Use-Trinkets, wer schläft drauf.
+- **Cooldowns (Major CDs)** — Erwartete Major-CDs pro Rolle (z.B. Lay on Hands für Pala-Healer, Hero/Bloodlust-Trigger), Slacker-Liste pro Fight.
+
+### Edikt & Policy-System
+- Konfigurierbare Elixier-Policy pro `Class:Spec` mit Modes `any`, `whitelist`, `flask-only`.
+- Public Edikt-Seite die die Policy lesbar mit Item-Icons und mehrstufiger Konsequenz-Liste darstellt.
+- Editierbare Edikt-Texte für die Konsequenz-Stufen.
+- Penalty-System: pro Spieler Strafprozente mit Begründung, Attendance-Penalties.
+
+### ThatsMyBis Integration
+- CSV-Import von TMB für Attendance, Loot-History, Raidgroups.
+- Cookie-basierte Auth (Cookie via Admin-UI konfigurierbar).
+- Auto-Refresh alle 30 Minuten im Hintergrund.
+- Track-spezifische Attendance-Filterung (current vs legacy) basierend auf Raid-Schedule-Match.
+
+### Admin-Bereich
+- Session-Login mit HttpOnly-Cookie, 24h TTL, sliding nicht aktiv.
+- Rollen: `admin` und `superadmin` (User-Management nur für Super).
+- Tabs: Reports, Einstellungen (Akkordeon mit 7 Sektionen), Spieler & Roster, Strafen, Consumes/Edikt, Tracking, Aktionen, Benutzer (Super-only), Changelog.
+- Komplettes Audit-Log aller Admin-Aktionen.
+
+### WoW-Classic-Fresh-Anpassungen
+- TBC Classic Fresh als Zielplattform: Items via wowhead.com/tbc, dataEnv=6.
+- SSC/TK + Karazhan + Gruul + Mag voll abgedeckt mit Boss-Mechanic-Spell-IDs.
+- Phase-bewusste Wipe-Erkennung (Vashj P2 Adds, Hydross Phasen-Wechsel, Leotheras Demon-Form, etc.).
+
+### Infrastruktur
+- SQLite via better-sqlite3, WAL-Mode, alle Caches und Settings als Key-Value.
+- WCL v1 REST (600 req/h pro IP) + v2 GraphQL OAuth (9000 Punkte/h) Rate-Limit-Queue mit Auto-Retry.
+- CSRF-Token pro Page-Load, alle `/api/`-Mutationen gegen geprüft.
+- Docker-Bind-Mount-Deploy ohne Rebuild für Code-Updates.
