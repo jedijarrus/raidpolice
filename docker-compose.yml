@@ -15,3 +15,4 @@ services:
       - ./preanalyze.js:/app/preanalyze.js
       - ./progression.js:/app/progression.js
       - ./simulate-live.js:/app/simulate-live.js
+      - ./RELEASE_NOTES.md:/app/RELEASE_NOTES.md

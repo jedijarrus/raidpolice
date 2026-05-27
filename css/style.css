@@ -2555,6 +2555,18 @@ body.girly-mode .butterfly { opacity: 0.9; }
 .penalty-table tbody tr:nth-child(even) { background: var(--bg-table-row-alt); }
 .penalty-table tbody tr:hover { background: var(--bg-hover); }
 .penalty-table tbody td:last-child { text-align: right; }
+.release-notes { max-width: 880px; margin: 0 auto; padding: 8px 0 32px; line-height: 1.55; }
+.release-notes h2 { font-size: 1.45rem; margin: 28px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--accent); }
+.release-notes h2:first-child { margin-top: 0; }
+.release-notes h3 { font-size: 1.05rem; margin: 22px 0 8px; color: var(--text); }
+.release-notes h4 { font-size: 0.95rem; margin: 14px 0 6px; color: var(--text-muted); font-weight: 600; }
+.release-notes p { margin: 6px 0; color: var(--text); }
+.release-notes ul { margin: 6px 0 12px; padding-left: 20px; color: var(--text); }
+.release-notes li { margin: 3px 0; }
+.release-notes code { background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 3px; font-size: 0.85em; color: var(--accent); }
+.release-notes strong { color: var(--text); font-weight: 600; }
+.release-notes hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
 .bp-checks {
   display: flex;
   flex-direction: column;

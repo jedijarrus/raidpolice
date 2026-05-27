@@ -462,6 +462,7 @@
       if (panel) panel.classList.add('active');
       if (tabId === 'dtab-stats' && !window._statsLoaded) loadAndRenderStats();
       if (tabId === 'dtab-edikt') loadEdikt();
+      if (tabId === 'dtab-releasenotes') loadReleaseNotes();
       history.replaceState(null, '', '#' + tabId.replace('dtab-', ''));
     }
     $$('.dash-tab-btn').forEach(btn => {
@@ -2432,6 +2433,51 @@
     }
 
     return result;
+  }
+
+  // ─── Release Notes (markdown rendering) ───
+  function renderMarkdown(md) {
+    const lines = md.split('\n');
+    const out = [];
+    let inList = false;
+    function closeList() { if (inList) { out.push('</ul>'); inList = false; } }
+    function inline(s) {
+      return escapeHtml(s)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+    for (let raw of lines) {
+      const line = raw.replace(/\s+$/, '');
+      if (line === '---') { closeList(); out.push('<hr>'); continue; }
+      if (!line.trim()) { closeList(); continue; }
+      let m;
+      if ((m = line.match(/^#{3}\s+(.+)$/))) { closeList(); out.push('<h4>' + inline(m[1]) + '</h4>'); continue; }
+      if ((m = line.match(/^#{2}\s+(.+)$/))) { closeList(); out.push('<h3>' + inline(m[1]) + '</h3>'); continue; }
+      if ((m = line.match(/^#{1}\s+(.+)$/))) { closeList(); out.push('<h2>' + inline(m[1]) + '</h2>'); continue; }
+      if ((m = line.match(/^[\s]*[-*]\s+(.+)$/))) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push('<li>' + inline(m[1]) + '</li>');
+        continue;
+      }
+      closeList();
+      out.push('<p>' + inline(line) + '</p>');
+    }
+    closeList();
+    return out.join('\n');
+  }
+  async function loadReleaseNotes() {
+    const host = $('#release-notes-content');
+    if (!host || host._loaded) return;
+    host.innerHTML = '<p class="text-muted">Lade...</p>';
+    try {
+      const r = await apiFetch('/api/release-notes');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const md = await r.text();
+      host.innerHTML = renderMarkdown(md);
+      host._loaded = true;
+    } catch (e) {
+      host.innerHTML = '<p class="text-error">Release Notes konnten nicht geladen werden: ' + escapeHtml(e.message) + '</p>';
+    }
   }
 
   // ─── EDIKT: Consumable-Policy public ───

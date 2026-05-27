@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <title>Raidpolice</title>
-  <link rel="stylesheet" href="css/style.css?v=105">
+  <link rel="stylesheet" href="css/style.css?v=106">
 </head>
 <body class="dark-mode">
 
@@ -59,6 +59,7 @@
       <button class="dash-tab-btn" data-dtab="dtab-progression">Spieler-Entwicklung</button>
       <button class="dash-tab-btn" data-dtab="dtab-stats">Statistik</button>
       <button class="dash-tab-btn" data-dtab="dtab-edikt">📜 Edikt</button>
+      <button class="dash-tab-btn" data-dtab="dtab-releasenotes">🆕 Release Notes</button>
     </nav>
 
     <!-- Raids Tab — Cards werden dynamisch aus raidSchedule generiert -->
@@ -123,6 +124,13 @@
     <!-- Edikt Tab (Consumable Policy, öffentlich) -->
     <div id="dtab-edikt" class="dash-tab-panel">
       <div id="edikt-content"><p class="text-muted">Wird geladen...</p></div>
+    </div>
+
+    <!-- Release Notes Tab -->
+    <div id="dtab-releasenotes" class="dash-tab-panel">
+      <div class="raid-section">
+        <div id="release-notes-content" class="release-notes"><p class="text-muted">Wird geladen...</p></div>
+      </div>
     </div>
   </section>
 
@@ -995,6 +1003,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=159"></script>
+  <script src="js/app.js?v=160"></script>
 </body>
 </html>

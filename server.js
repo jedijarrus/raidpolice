@@ -1959,6 +1959,17 @@ async function handleRequest(req, res) {
   }
 
   // ─── Public: Elixier-Policy lesen (für Buff-Filter im Frontend) ───
+  if (parsed.pathname === '/api/release-notes' && req.method === 'GET') {
+    try {
+      const md = fs.readFileSync(path.join(__dirname, 'RELEASE_NOTES.md'), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', ...SECURITY_HEADERS });
+      res.end(md);
+    } catch (e) {
+      res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Release notes not found' }));
+    }
+    return;
+  }
   if (parsed.pathname === '/api/elixir-policy' && req.method === 'GET') {
     const raw = cache.getSetting('elixirPolicy');
     let policy = {};
