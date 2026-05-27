@@ -1963,8 +1963,26 @@ async function handleRequest(req, res) {
     const raw = cache.getSetting('elixirPolicy');
     let policy = {};
     if (raw) { try { policy = JSON.parse(raw); } catch (_) {} }
+    const bossRaw = cache.getSetting('bossPolicy');
+    let bossPolicy = {};
+    if (bossRaw) { try { bossPolicy = JSON.parse(bossRaw); } catch (_) {} }
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-    res.end(JSON.stringify({ policy }));
+    res.end(JSON.stringify({ policy, bossPolicy }));
+    return;
+  }
+  if (parsed.pathname === '/api/admin/boss-policy' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      const bp = body.bossPolicy || {};
+      cache.putSetting('bossPolicy', JSON.stringify(bp));
+      logAction(req, 'boss_policy_save', Object.keys(bp).join(','));
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
   // ─── Public: Elixier-Namen aus gecachten Buff-Analysen (ohne Admin-Auth) ───

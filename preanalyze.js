@@ -889,6 +889,39 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
     return null;
   }
 
+  // Spielmechanik: Flask + Battle/Guardian Elixir sind mutually exclusive.
+  // Ein neueres Elixir-Trinken cancelt die laufende Flask (und umgekehrt).
+  // Daher pro Fight die jüngsten Band-Starts vergleichen, statt nur "irgendein
+  // Band in den letzten 2h gilt als aktiv".
+  function getLatestConsume(playerIdx, guidSet, fight, durationMs) {
+    const auras = wideBuffs[playerIdx] || [];
+    let best = null;
+    for (const a of auras) {
+      if (!guidSet.has(a.guid)) continue;
+      for (const band of (a.bands || [])) {
+        if (band.startTime > fight.end_time) continue;
+        if (band.startTime + durationMs < fight.start_time) continue;
+        if (!best || band.startTime > best.time) {
+          best = { time: band.startTime, id: a.guid, name: a.name };
+        }
+      }
+    }
+    return best;
+  }
+  function inferFlaskElixirState(playerIdx, fight) {
+    const f = getLatestConsume(playerIdx, BUFF_SETS.flask, fight, BUFF_DURATION_MS.flask);
+    const b = getLatestConsume(playerIdx, BUFF_SETS.battleElixir, fight, BUFF_DURATION_MS.battleElixir);
+    const g = getLatestConsume(playerIdx, BUFF_SETS.guardianElixir, fight, BUFF_DURATION_MS.guardianElixir);
+    // Flask gewinnt nur wenn sie strikt neuer als beide Elixiere ist (kein Elixir hat sie gecancelt)
+    if (f && (!b || f.time >= b.time) && (!g || f.time >= g.time)) {
+      return { flask: { id: f.id, name: f.name }, battleElixir: null, guardianElixir: null };
+    }
+    // Sonst: Battle und Guardian individuell — jeweils nur wenn nach der letzten Flask (oder ohne Flask)
+    const battle = b && (!f || b.time > f.time) ? { id: b.id, name: b.name } : null;
+    const guardian = g && (!f || g.time > f.time) ? { id: g.id, name: g.name } : null;
+    return { flask: null, battleElixir: battle, guardianElixir: guardian };
+  }
+
   const results = [];
   for (let pi = 0; pi < totalPlayers; pi++) {
     const player = playerList[pi];
@@ -906,28 +939,27 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
       playerResult.playerFightCount++;
       const fightDetail = { flask: null, battleElixir: null, guardianElixir: null, food: null, scrolls: [] };
 
-      let hasFlask = false;
+      // Direkt-Auren aus Fight-Snapshot
+      let directFlask = null, directBattle = null, directGuardian = null;
       for (const a of auras) {
-        if (BUFF_SETS.flask.has(a.guid)) { hasFlask = true; fightDetail.flask = { id: a.guid, name: a.name }; break; }
+        if (!directFlask && BUFF_SETS.flask.has(a.guid)) directFlask = { id: a.guid, name: a.name };
+        if (!directBattle && BUFF_SETS.battleElixir.has(a.guid)) directBattle = { id: a.guid, name: a.name };
+        if (!directGuardian && BUFF_SETS.guardianElixir.has(a.guid)) directGuardian = { id: a.guid, name: a.name };
       }
-      // Fallback: Flask vor Report-Start applied → über Report-wide Bands inferieren
-      if (!hasFlask) {
-        const inferred = findInferredAura(pi, BUFF_SETS.flask, bossFights[fi], BUFF_DURATION_MS.flask);
-        if (inferred) { hasFlask = true; fightDetail.flask = inferred; }
-      }
-      if (hasFlask) { playerResult.flask++; playerResult.flaskOrElixir++; }
-      if (!hasFlask) {
-        for (const a of auras) { if (BUFF_SETS.battleElixir.has(a.guid)) { playerResult.battleElixir++; fightDetail.battleElixir = { id: a.guid, name: a.name }; break; } }
-        if (!fightDetail.battleElixir) {
-          const inf = findInferredAura(pi, BUFF_SETS.battleElixir, bossFights[fi], BUFF_DURATION_MS.battleElixir);
-          if (inf) { playerResult.battleElixir++; fightDetail.battleElixir = inf; }
-        }
-        for (const a of auras) { if (BUFF_SETS.guardianElixir.has(a.guid)) { playerResult.guardianElixir++; fightDetail.guardianElixir = { id: a.guid, name: a.name }; break; } }
-        if (!fightDetail.guardianElixir) {
-          const inf = findInferredAura(pi, BUFF_SETS.guardianElixir, bossFights[fi], BUFF_DURATION_MS.guardianElixir);
-          if (inf) { playerResult.guardianElixir++; fightDetail.guardianElixir = inf; }
-        }
-        if (fightDetail.battleElixir && fightDetail.guardianElixir) playerResult.flaskOrElixir++;
+      // Konsum-Timeline aus Report-wide Bands — Elixir cancelt Flask und umgekehrt
+      const stateInf = inferFlaskElixirState(pi, bossFights[fi]);
+      // Direkt > Inferenz, aber Inferenz respektiert die Cancel-Mechanik
+      const flask = directFlask || stateInf.flask;
+      const battleElixir = (!flask && (directBattle || stateInf.battleElixir)) || null;
+      const guardianElixir = (!flask && (directGuardian || stateInf.guardianElixir)) || null;
+      fightDetail.flask = flask;
+      fightDetail.battleElixir = battleElixir;
+      fightDetail.guardianElixir = guardianElixir;
+      if (flask) { playerResult.flask++; playerResult.flaskOrElixir++; }
+      else {
+        if (battleElixir) playerResult.battleElixir++;
+        if (guardianElixir) playerResult.guardianElixir++;
+        if (battleElixir && guardianElixir) playerResult.flaskOrElixir++;
       }
       for (const a of auras) { if (BUFF_SETS.foodBuff.has(a.guid)) { playerResult.foodBuff++; fightDetail.food = { id: a.guid, name: a.name }; break; } }
       if (!fightDetail.food) {
@@ -3233,14 +3265,29 @@ function liveNormalizeRoleKey(rk) {
 function liveLoadPolicy() {
   try { return JSON.parse(cache.getSetting('elixirPolicy') || '{}') || {}; } catch (_) { return {}; }
 }
+function liveLoadBossPolicy() {
+  try { return JSON.parse(cache.getSetting('bossPolicy') || '{}') || {}; } catch (_) { return {}; }
+}
+function liveResolvePolicy(roleKey, bossName, basePolicy, bossPolicy) {
+  const role = liveNormalizeRoleKey(roleKey);
+  const base = (role && basePolicy && basePolicy[role]) || { mode: 'any' };
+  if (!bossName || !bossPolicy) return base;
+  const extra = (bossPolicy[bossName] || {})[role];
+  if (!extra) return base;
+  return {
+    mode: base.mode,
+    flaskAllowed: [ ...(base.flaskAllowed || []), ...(extra.flaskAllowed || []) ],
+    battleAllowed: [ ...(base.battleAllowed || []), ...(extra.battleAllowed || []) ],
+    guardianAllowed: [ ...(base.guardianAllowed || []), ...(extra.guardianAllowed || []) ],
+  };
+}
 function liveWhitelistMatches(allowedIds, id) {
   if (id == null) return false;
   if (!Array.isArray(allowedIds) || !allowedIds.length) return false;
   return allowedIds.includes(id);
 }
-function liveIsFlaskOrElixirOk(roleKey, flaskId, battleId, guardianId, policy) {
-  const role = liveNormalizeRoleKey(roleKey);
-  const pol = (role && policy && policy[role]) || { mode: 'any' };
+function liveIsFlaskOrElixirOk(roleKey, flaskId, battleId, guardianId, policy, bossName, bossPolicy) {
+  const pol = liveResolvePolicy(roleKey, bossName, policy, bossPolicy);
   if (pol.mode === 'flask-only') return flaskId != null && liveWhitelistMatches(pol.flaskAllowed, flaskId);
   if (pol.mode === 'whitelist') {
     if (flaskId != null && liveWhitelistMatches(pol.flaskAllowed, flaskId)) return true;
@@ -3253,6 +3300,7 @@ function liveIsFlaskOrElixirOk(roleKey, flaskId, battleId, guardianId, policy) {
 
 async function analyzeLiveFight(reportCode, fight, reportStart) {
   const livePolicy = liveLoadPolicy();
+  const liveBossPolicy = liveLoadBossPolicy();
   // Fetch summary (has gear data + player list)
   const summary = await wclApi(`/report/tables/summary/${reportCode}`, {
     start: fight.start_time, end: fight.end_time, translate: true
@@ -3290,6 +3338,33 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
       }
     }
     return null;
+  }
+  // Jüngsten Konsum-Band-Start im erlaubten Zeitfenster suchen — für Flask/Elixir Cancel-Mechanik
+  function liveLatestConsume(playerIdx, guidSet, durationMs) {
+    const auras = wideBuffResults[playerIdx]?.auras || [];
+    let best = null;
+    for (const a of auras) {
+      if (!guidSet.has(a.guid)) continue;
+      for (const band of (a.bands || [])) {
+        if (band.startTime > fight.end_time) continue;
+        if (band.startTime + durationMs < fight.start_time) continue;
+        if (!best || band.startTime > best.time) best = { time: band.startTime, id: a.guid, name: a.name };
+      }
+    }
+    return best;
+  }
+  function liveInferFlaskElixir(playerIdx) {
+    const f = liveLatestConsume(playerIdx, BUFF_SETS.flask, LIVE_BUFF_DURATION_MS.flask);
+    const b = liveLatestConsume(playerIdx, BUFF_SETS.battleElixir, LIVE_BUFF_DURATION_MS.battleElixir);
+    const g = liveLatestConsume(playerIdx, BUFF_SETS.guardianElixir, LIVE_BUFF_DURATION_MS.guardianElixir);
+    if (f && (!b || f.time >= b.time) && (!g || f.time >= g.time)) {
+      return { flask: { id: f.id, name: f.name }, battleElixir: null, guardianElixir: null };
+    }
+    return {
+      flask: null,
+      battleElixir: b && (!f || b.time > f.time) ? { id: b.id, name: b.name } : null,
+      guardianElixir: g && (!f || g.time > f.time) ? { id: g.id, name: g.name } : null,
+    };
   }
 
   // Fetch casts for all players (for spell ranks)
@@ -3352,27 +3427,36 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     // ── Buff/Consume Issues ──
     const buffIssues = [];
 
-    // Flask / Elixir — Policy-aware
+    // Flask / Elixir — Policy-aware. Game-Mechanik: Elixir cancelt Flask und umgekehrt.
     let flaskId = null, flaskName = null;
     let battleId = null, battleName = null;
     let guardianId = null, guardianName = null;
     for (const a of auras) { if (BUFF_SETS.flask.has(a.guid)) { flaskId = a.guid; flaskName = a.name; break; } }
     for (const a of auras) { if (BUFF_SETS.battleElixir.has(a.guid)) { battleId = a.guid; battleName = a.name; break; } }
     for (const a of auras) { if (BUFF_SETS.guardianElixir.has(a.guid)) { guardianId = a.guid; guardianName = a.name; break; } }
-    // Fallback: Report-wide Band-Match für Buffs die vor Report-Start gepoppt wurden
-    if (flaskId == null) {
-      const inf = liveInferAura(pi, BUFF_SETS.flask, LIVE_BUFF_DURATION_MS.flask);
-      if (inf) { flaskId = inf.id; flaskName = inf.name; }
+    // Inferenz nur wenn Direkt-Auren keine konkurrierenden Buffs aufzeigen,
+    // und die Konsum-Timeline (jüngster Band-Start gewinnt) respektieren
+    if (flaskId == null && battleId == null && guardianId == null) {
+      const st = liveInferFlaskElixir(pi);
+      if (st.flask) { flaskId = st.flask.id; flaskName = st.flask.name; }
+      if (st.battleElixir) { battleId = st.battleElixir.id; battleName = st.battleElixir.name; }
+      if (st.guardianElixir) { guardianId = st.guardianElixir.id; guardianName = st.guardianElixir.name; }
+    } else {
+      // Direkt-Auren existieren teilweise — Flask-Inferenz unterdrücken wenn Elixir direkt gesehen
+      if (flaskId == null && battleId == null && guardianId == null) {
+        const inf = liveInferAura(pi, BUFF_SETS.flask, LIVE_BUFF_DURATION_MS.flask);
+        if (inf) { flaskId = inf.id; flaskName = inf.name; }
+      }
+      if (battleId == null && flaskId == null) {
+        const inf = liveInferAura(pi, BUFF_SETS.battleElixir, LIVE_BUFF_DURATION_MS.battleElixir);
+        if (inf) { battleId = inf.id; battleName = inf.name; }
+      }
+      if (guardianId == null && flaskId == null) {
+        const inf = liveInferAura(pi, BUFF_SETS.guardianElixir, LIVE_BUFF_DURATION_MS.guardianElixir);
+        if (inf) { guardianId = inf.id; guardianName = inf.name; }
+      }
     }
-    if (battleId == null) {
-      const inf = liveInferAura(pi, BUFF_SETS.battleElixir, LIVE_BUFF_DURATION_MS.battleElixir);
-      if (inf) { battleId = inf.id; battleName = inf.name; }
-    }
-    if (guardianId == null) {
-      const inf = liveInferAura(pi, BUFF_SETS.guardianElixir, LIVE_BUFF_DURATION_MS.guardianElixir);
-      if (inf) { guardianId = inf.id; guardianName = inf.name; }
-    }
-    const flaskOk = liveIsFlaskOrElixirOk(role, flaskId, battleId, guardianId, livePolicy);
+    const flaskOk = liveIsFlaskOrElixirOk(role, flaskId, battleId, guardianId, livePolicy, fight && fight.name, liveBossPolicy);
     if (!flaskOk) {
       const fName = liveDisplayName(flaskId, flaskName);
       const bName = liveDisplayName(battleId, battleName);

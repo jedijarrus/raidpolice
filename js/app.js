@@ -1689,10 +1689,22 @@
     }
     return false;
   }
-  function isFlaskOrElixirOk(fd) {
-    const policy = window._elixirPolicy || {};
+  // Merge base + boss-spezifische Sonderlocken (additiv pro Liste)
+  function resolveElixirPolicy(roleKey, bossName) {
+    const base = (roleKey && (window._elixirPolicy || {})[roleKey]) || { mode: 'any' };
+    if (!bossName) return base;
+    const extra = ((window._bossPolicy || {})[bossName] || {})[roleKey];
+    if (!extra) return base;
+    return {
+      mode: base.mode,
+      flaskAllowed: [ ...(base.flaskAllowed || []), ...(extra.flaskAllowed || []) ],
+      battleAllowed: [ ...(base.battleAllowed || []), ...(extra.battleAllowed || []) ],
+      guardianAllowed: [ ...(base.guardianAllowed || []), ...(extra.guardianAllowed || []) ],
+    };
+  }
+  function isFlaskOrElixirOk(fd, bossName) {
     const roleKey = normalizeRoleKey(fd.roleKey);
-    const pol = (roleKey && policy[roleKey]) || { mode: 'any' };
+    const pol = resolveElixirPolicy(roleKey, bossName);
     if (pol.mode === 'flask-only') {
       if (!fd.flask) return false;
       return whitelistMatches(pol.flaskAllowed, fd.flask);
@@ -1732,9 +1744,11 @@
       // client-seitig, also überschreiben wir den Wert.)
       if (r.fightDetails) {
         r.flaskOrElixir = 0;
-        for (const fd of r.fightDetails) {
+        for (let fi = 0; fi < r.fightDetails.length; fi++) {
+          const fd = r.fightDetails[fi];
           if (!fd) continue;
-          if (isFlaskOrElixirOk(fd)) r.flaskOrElixir++;
+          const bn = bossFights[fi] && bossFights[fi].name;
+          if (isFlaskOrElixirOk(fd, bn)) r.flaskOrElixir++;
         }
       }
       const cn = classNameFromType(r.type);
@@ -1784,9 +1798,9 @@
 
           // Hilfsfunktion für Item-Name (Objekt {id,name} oder String)
           const elixirName = (v) => elixirDisplayName(v);
-          // Policy lookup für diesen Fight
+          // Policy lookup für diesen Fight (inkl. Boss-Sonderregel)
           const polRole = fd && normalizeRoleKey(fd.roleKey);
-          const fdPol = (polRole && (window._elixirPolicy || {})[polRole]) || { mode: 'any' };
+          const fdPol = resolveElixirPolicy(polRole, fight && fight.name);
           function chipForItem(entry, allowedIds, kind) {
             if (!entry) return null;
             const name = elixirName(entry);
@@ -2584,8 +2598,9 @@
       if (epResp.ok) {
         const ep = await epResp.json();
         window._elixirPolicy = ep.policy || {};
+        window._bossPolicy = ep.bossPolicy || {};
       }
-    } catch (e) { window._elixirPolicy = {}; }
+    } catch (e) { window._elixirPolicy = {}; window._bossPolicy = {}; }
 
     // Fetch penalties & excused absences
     try {
@@ -5903,6 +5918,120 @@
       _elixirPolicyState = { policy: { ...pol }, observed: obs };
       renderElixirPolicyEditor();
     } catch (e) { host.innerHTML = '<p class="text-muted">Fehler: ' + escapeHtml(e.message) + '</p>'; }
+    // Boss-Policy lädt parallel — gleiche Roles, eigene Save-Action
+    loadBossPolicyEditor();
+  }
+
+  // ─── Boss-Sonderregeln Editor ───
+  const KNOWN_BOSSES = [
+    'Magtheridon', 'Gruul the Dragonkiller',
+    'Hydross the Unstable', 'The Lurker Below', 'Leotheras the Blind',
+    'Fathom-Lord Karathress', 'Morogrim Tidewalker', 'Lady Vashj',
+    "Al'ar", 'Void Reaver', 'High Astromancer Solarian', "Kael'thas Sunstrider"
+  ];
+  function _bossPolicyState() { return window._bossPolicyRows || (window._bossPolicyRows = []); }
+  async function loadBossPolicyEditor() {
+    if (!$('#boss-policy-body')) return;
+    try {
+      const r = await apiFetch('/api/elixir-policy');
+      const j = await r.json();
+      const bp = j.bossPolicy || {};
+      const rows = [];
+      for (const boss of Object.keys(bp)) {
+        for (const role of Object.keys(bp[boss] || {})) {
+          const e = bp[boss][role] || {};
+          rows.push({
+            boss, role,
+            flask: (e.flaskAllowed || []).join(','),
+            battle: (e.battleAllowed || []).join(','),
+            guardian: (e.guardianAllowed || []).join(','),
+          });
+        }
+      }
+      window._bossPolicyRows = rows;
+    } catch (_) { window._bossPolicyRows = []; }
+    renderBossPolicyRows();
+    const addBtn = $('#btn-boss-policy-add');
+    if (addBtn && !addBtn._wired) {
+      addBtn._wired = true;
+      addBtn.addEventListener('click', () => {
+        _bossPolicyState().push({ boss: KNOWN_BOSSES[0], role: 'Paladin:tank', flask: '', battle: '', guardian: '' });
+        renderBossPolicyRows();
+      });
+    }
+    const saveBtn = $('#btn-boss-policy-save');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const status = $('#boss-policy-status');
+        const out = {};
+        function parseIds(s) {
+          return (s || '').split(',').map(x => parseInt(x.trim(), 10)).filter(n => Number.isFinite(n));
+        }
+        for (const row of _bossPolicyState()) {
+          if (!row.boss || !row.role) continue;
+          const entry = {};
+          const f = parseIds(row.flask);
+          const b = parseIds(row.battle);
+          const g = parseIds(row.guardian);
+          if (f.length) entry.flaskAllowed = f;
+          if (b.length) entry.battleAllowed = b;
+          if (g.length) entry.guardianAllowed = g;
+          if (!Object.keys(entry).length) continue;
+          out[row.boss] = out[row.boss] || {};
+          out[row.boss][row.role] = entry;
+        }
+        try {
+          const resp = await apiFetch('/api/admin/boss-policy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bossPolicy: out }),
+          });
+          if (!resp.ok) { const j = await resp.json(); throw new Error(j.error || 'HTTP ' + resp.status); }
+          window._bossPolicy = out;
+          status.textContent = 'Gespeichert.';
+        } catch (e) { status.textContent = 'Fehler: ' + e.message; }
+      });
+    }
+  }
+  function renderBossPolicyRows() {
+    const tbody = $('#boss-policy-body');
+    if (!tbody) return;
+    const rows = _bossPolicyState();
+    const roleOptions = Object.keys((_elixirPolicyState && _elixirPolicyState.policy) || {}).sort();
+    if (!roleOptions.length) roleOptions.push('Paladin:tank');
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Keine Sonderregeln definiert.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((row, i) => {
+      const bossOpts = KNOWN_BOSSES.map(b => `<option value="${escapeHtml(b)}"${b === row.boss ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
+      const roleOpts = roleOptions.map(r => `<option value="${escapeHtml(r)}"${r === row.role ? ' selected' : ''}>${escapeHtml(r)}</option>`).join('');
+      return `<tr>
+        <td><select class="penalty-input" data-bp-field="boss" data-bp-idx="${i}">${bossOpts}</select></td>
+        <td><select class="penalty-input" data-bp-field="role" data-bp-idx="${i}">${roleOpts}</select></td>
+        <td><input class="penalty-input" data-bp-field="flask" data-bp-idx="${i}" value="${escapeHtml(row.flask)}" placeholder="17629,…" style="width:8em"></td>
+        <td><input class="penalty-input" data-bp-field="battle" data-bp-idx="${i}" value="${escapeHtml(row.battle)}" placeholder="" style="width:8em"></td>
+        <td><input class="penalty-input" data-bp-field="guardian" data-bp-idx="${i}" value="${escapeHtml(row.guardian)}" placeholder="" style="width:8em"></td>
+        <td><button class="penalty-btn penalty-btn--remove" data-bp-del="${i}">×</button></td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('[data-bp-field]').forEach(el => {
+      el.addEventListener('change', () => {
+        const i = parseInt(el.getAttribute('data-bp-idx'), 10);
+        const f = el.getAttribute('data-bp-field');
+        if (rows[i]) rows[i][f] = el.value;
+      });
+      el.addEventListener('input', () => {
+        const i = parseInt(el.getAttribute('data-bp-idx'), 10);
+        const f = el.getAttribute('data-bp-field');
+        if (rows[i]) rows[i][f] = el.value;
+      });
+    });
+    tbody.querySelectorAll('[data-bp-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.getAttribute('data-bp-del'), 10);
+        rows.splice(i, 1);
+        renderBossPolicyRows();
+      });
+    });
   }
 
   function renderElixirPolicyEditor() {
