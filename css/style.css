@@ -2559,24 +2559,26 @@ body.girly-mode .butterfly { opacity: 0.9; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 180px;
+  max-height: 200px;
   overflow-y: auto;
-  padding: 4px 6px;
-  background: rgba(0,0,0,0.15);
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.18);
   border-radius: var(--radius-sm);
-  min-width: 180px;
+  min-width: 220px;
 }
 .bp-check {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
+  gap: 8px;
+  font-size: 0.82rem;
   cursor: pointer;
-  padding: 1px 0;
+  padding: 2px 0;
   white-space: nowrap;
+  color: var(--text);
 }
-.bp-check input[type=checkbox] { margin: 0; flex-shrink: 0; }
-.bp-check span { line-height: 1.2; }
+.bp-check input[type=checkbox] { margin: 0; flex-shrink: 0; width: 14px; height: 14px; }
+.bp-check span { line-height: 1.2; color: var(--text); display: inline-block; }
+.penalty-card__table-wrap:has(#boss-policy-body) { overflow-x: auto; overflow-y: hidden; }
 
 .penalty-table .btn-sm.btn-danger {
   padding: 3px 10px;

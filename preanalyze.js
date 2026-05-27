@@ -943,9 +943,9 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
         }, { nocache: true });
         const entries = resp.entries || [];
         const rs = entries.find(e => RAPTOR_STRIKE_IDS.includes(e.guid));
-        if (rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS) {
-          weavedSet.add(fi);
-        }
+        const hasRaptor = rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS;
+        const hasWfProc = entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0);
+        if (hasRaptor && hasWfProc) weavedSet.add(fi);
       } catch (_) {}
     }
     if (weavedSet.size) hunterWeaveFights.set(player.name, weavedSet);
@@ -3407,7 +3407,7 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     }).catch(() => ({ entries: [] }))
   ));
 
-  // Hunter Melee-Weave-Detection: Raptor-Strike-Hits ≥ Schwellwert im Fight.
+  // Hunter Melee-Weave-Detection: Raptor-Strike ≥ Schwellwert UND WF-Attack-Proc > 0.
   const liveHunterWeaves = new Set();
   await Promise.all(players.map(async (p) => {
     if (p.type !== 'Hunter') return;
@@ -3417,9 +3417,9 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
       }, { nocache: true });
       const entries = dd.entries || [];
       const rs = entries.find(e => RAPTOR_STRIKE_IDS.includes(e.guid));
-      if (rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS) {
-        liveHunterWeaves.add(p.name);
-      }
+      const hasRaptor = rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS;
+      const hasWfProc = entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0);
+      if (hasRaptor && hasWfProc) liveHunterWeaves.add(p.name);
     } catch (_) {}
   }));
 
