@@ -806,6 +806,17 @@ async function analyzeGear(reportCode, bossFights, reportStartTs) {
       }
       const pm = playerMap[p.name];
       pm.fightCount++;
+      // Track welche Slots in irgendeinem Fight gefüllt waren — gegen False-Positives
+      // durch Boss-Mechaniken die Items temporär entziehen (Kael Weapon Storm etc.).
+      if (!pm.filledSlots) pm.filledSlots = new Set();
+      const ciGear = (p.combatantInfo && p.combatantInfo.gear) || p.gear || [];
+      for (let gi = 0; gi < ciGear.length; gi++) {
+        const it = ciGear[gi];
+        if (!it || !it.id) continue;
+        const slotNum = it.slot !== undefined ? it.slot : gi;
+        const slotName = CLA_DATA.gearSlots[slotNum] || `Slot ${slotNum}`;
+        pm.filledSlots.add(slotName);
+      }
       const fightIssues = checkPlayerGear(p, className);
       const metaIdx = fightIssues.findIndex(i => i.issue.startsWith('Meta-Gem nicht aktiviert'));
       if (metaIdx >= 0) { pm.metaInactiveCount++; pm.metaDetail = fightIssues[metaIdx].issue; pm.metaGemId = fightIssues[metaIdx].metaGemId; fightIssues.splice(metaIdx, 1); }
@@ -820,7 +831,16 @@ async function analyzeGear(reportCode, bossFights, reportStartTs) {
   }
   const results = [];
   for (const [name, pm] of Object.entries(playerMap)) {
-    const issues = Object.values(pm.issueMap);
+    let issues = Object.values(pm.issueMap);
+    // Leerer-Slot-Issues entfernen, wenn dieser Slot in mindestens einem Fight gefüllt war
+    // (Boss-Mechaniken wie Kael Weapon Storm können Items temporär entziehen).
+    if (pm.filledSlots && pm.filledSlots.size) {
+      issues = issues.filter(i => !(i.issue === 'Leerer Slot' && pm.filledSlots.has(i.slot)));
+      // perFight ebenfalls bereinigen, damit Fight-by-Fight-Ansicht konsistent bleibt
+      for (const pf of (pm.perFight || [])) {
+        pf.issues = (pf.issues || []).filter(i => !(i.issue === 'Leerer Slot' && pm.filledSlots.has(i.slot)));
+      }
+    }
     if (pm.metaInactiveCount > 0) {
       const detail = pm.metaDetail ? ` — ${pm.metaDetail.replace('Meta-Gem nicht aktiviert ', '')}` : '';
       issues.push({ slot: 'Head', issue: `Meta-Gem nicht aktiviert (${pm.metaInactiveCount}/${pm.fightCount} Fights)${detail}`, severity: 'high', metaGemId: pm.metaGemId || null });

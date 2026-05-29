@@ -1,5 +1,17 @@
 # Release Notes
 
+## 2026-05-29
+
+### Windfury-Erkennung über Aura statt Damage-Event
+Die Hunter-Weave-Erkennung hat Windfury bisher anhand des Damage-Events `Windfury Attack` geprüft. Das ist unzuverlässig — WCL trackt den Proc als kurze Aura auf dem Spieler (`totalUptime > 0`), aber liefert nicht in jedem Fall ein zugehöriges Damage-Event in der damage-done-Tabelle.
+- Neu: Detection nutzt die WF-Attack-Aura aus den ohnehin geholten Per-Fight-Buffs.
+- Beispiel: Lyserie auf dem 28.05-Report wurde mit der alten Logik auf 0/15 Fights als Weaver erkannt, obwohl sie auf jedem Boss zweistellig Raptor Strikes gepostet hat. Mit der neuen Logik korrekt auf 8/15 markiert.
+
+### Gear-Analyse: Leerer-Slot-Filter über alle Fights
+Boss-Mechaniken wie Kael Weapon Storm können einen Slot temporär leeren — WCL hat im Snapshot dann einen Empty-Slot stehen, der bisher als „Leerer Slot (high)" geflaggt wurde.
+- Neu: Wenn ein Slot **in irgendeinem Boss-Fight** des Reports gefüllt war, werden Empty-Slot-Issues für diesen Slot bei diesem Spieler in diesem Report ignoriert.
+- Greift automatisch für alle Bosse mit ähnlicher Mechanik (Vashj Tainted-Phase, Solarian Wrath of the Astromancer Death+Res, etc.).
+
 ## 2026-05-27
 
 ### Boss-Sonderregeln (Consumes / Edikt)
