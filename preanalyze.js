@@ -944,8 +944,11 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
         const entries = resp.entries || [];
         const rs = entries.find(e => RAPTOR_STRIKE_IDS.includes(e.guid));
         const hasRaptor = rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS;
-        const hasWfProc = entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0);
-        if (hasRaptor && hasWfProc) weavedSet.add(fi);
+        // WF erscheint als Aura "Windfury Attack" auf dem Spieler bei jedem Proc — auch
+        // ohne dazugehöriges Damage-Event (WCL trackt den Buff, nicht zwingend den Hit).
+        const fightAuras = (buffData[fi][pi] || {}).auras || [];
+        const hasWfAura = fightAuras.some(a => WF_ATTACK_DAMAGE_IDS.includes(a.guid) && (a.totalUptime || 0) > 0);
+        if (hasRaptor && hasWfAura) weavedSet.add(fi);
       } catch (_) {}
     }
     if (weavedSet.size) hunterWeaveFights.set(player.name, weavedSet);
@@ -3407,9 +3410,11 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     }).catch(() => ({ entries: [] }))
   ));
 
-  // Hunter Melee-Weave-Detection: Raptor-Strike ≥ Schwellwert UND WF-Attack-Proc > 0.
+  // Hunter Melee-Weave-Detection: Raptor-Strike ≥ Schwellwert UND WF-Attack-Aura > 0.
+  // WF erscheint als kurze Aura auf dem Spieler bei jedem Proc — der existierende
+  // buffResults[pi].auras Snapshot enthält das, wenn vorhanden.
   const liveHunterWeaves = new Set();
-  await Promise.all(players.map(async (p) => {
+  await Promise.all(players.map(async (p, idx) => {
     if (p.type !== 'Hunter') return;
     try {
       const dd = await wclApi(`/report/tables/damage-done/${reportCode}`, {
@@ -3418,8 +3423,9 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
       const entries = dd.entries || [];
       const rs = entries.find(e => RAPTOR_STRIKE_IDS.includes(e.guid));
       const hasRaptor = rs && (rs.hitCount || rs.uses || 0) >= HUNTER_WEAVE_MIN_HITS;
-      const hasWfProc = entries.some(e => WF_ATTACK_DAMAGE_IDS.includes(e.guid) && (e.total || 0) > 0);
-      if (hasRaptor && hasWfProc) liveHunterWeaves.add(p.name);
+      const fightAuras = (buffResults[idx] || {}).auras || [];
+      const hasWfAura = fightAuras.some(a => WF_ATTACK_DAMAGE_IDS.includes(a.guid) && (a.totalUptime || 0) > 0);
+      if (hasRaptor && hasWfAura) liveHunterWeaves.add(p.name);
     } catch (_) {}
   }));
 
