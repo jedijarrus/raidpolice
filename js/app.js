@@ -7633,6 +7633,10 @@
     }
 
     // ── Aggregate Consumes per Item-Name über alle Reports + Spieler ──
+    // Flasks/Elixiere/Food: einmaliger Konsum hält 1–2h. Pro (report, player, name)
+    // nur 1× zählen — sonst würden 9 Bosse × 25 Spieler eine einzige Flask-Runde
+    // als 225 Anwendungen ausweisen.
+    // Pots / Runes / Engi-Items / Sonstiges sind Single-Use → pro Fight zählen.
     const consumeName = (v) => elixirDisplayName(v) || null;
     const totalFlasks = new Map();
     const totalBattle = new Map();
@@ -7640,17 +7644,29 @@
     const totalFood = new Map();
     const totalConsItems = new Map(); // label -> { cat, count }
     let aggReportCount = 0;
-    for (const { bundle } of bundles) {
+    function bumpUnique(seenSet, map, reportCode, playerName, itemName) {
+      if (!itemName) return;
+      const key = `${reportCode}|${playerName}|${itemName}`;
+      if (seenSet.has(key)) return;
+      seenSet.add(key);
+      map.set(itemName, (map.get(itemName) || 0) + 1);
+    }
+    const seenFlasks = new Set();
+    const seenBattle = new Set();
+    const seenGuardian = new Set();
+    const seenFood = new Set();
+    for (const { report, bundle } of bundles) {
       aggReportCount++;
+      const reportCode = report.id;
       const buffs = bundle.analysis && bundle.analysis.buffs;
       if (buffs) for (const p of buffs) {
         if (statsExcluded.has(p.name)) continue;
         for (const fd of (p.fightDetails || [])) {
           if (!fd) continue;
-          const f = consumeName(fd.flask); if (f) totalFlasks.set(f, (totalFlasks.get(f) || 0) + 1);
-          const b = consumeName(fd.battleElixir); if (b) totalBattle.set(b, (totalBattle.get(b) || 0) + 1);
-          const g = consumeName(fd.guardianElixir); if (g) totalGuardian.set(g, (totalGuardian.get(g) || 0) + 1);
-          const fo = consumeName(fd.food); if (fo) totalFood.set(fo, (totalFood.get(fo) || 0) + 1);
+          bumpUnique(seenFlasks, totalFlasks, reportCode, p.name, consumeName(fd.flask));
+          bumpUnique(seenBattle, totalBattle, reportCode, p.name, consumeName(fd.battleElixir));
+          bumpUnique(seenGuardian, totalGuardian, reportCode, p.name, consumeName(fd.guardianElixir));
+          bumpUnique(seenFood, totalFood, reportCode, p.name, consumeName(fd.food));
         }
       }
       const cons = bundle.analysis && bundle.analysis.consumables;

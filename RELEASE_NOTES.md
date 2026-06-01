@@ -2,6 +2,11 @@
 
 ## 2026-06-01
 
+### Statistik: Flask/Elixir/Food werden nicht mehr pro Fight gezählt
+Die Consumes-Übersicht im Statistik-Tab hat eine Flask pro Spieler **pro Bossfight** als Anwendung gezählt — bei 25 Spielern × 9 Bossen wurde eine einzige Flask-Runde so als 225 Anwendungen ausgewiesen. Da Flask 2h und Battle/Guardian/Food jeweils 1h halten, deckt ein Drink den ganzen Raid ab.
+- Neu: pro `(Report, Spieler, Konsum-Name)` wird nur 1× gezählt. Wechselt jemand mid-raid die Flask (z.B. Chromatic Resistance auf Hydross, danach Greater Arcane Elixir), zählen das korrekt zwei verschiedene Anwendungen.
+- Single-Use-Items (Pots, Runes, Engineering-Items, Sonstiges) bleiben pro Fight gezählt — die werden ja tatsächlich mehrfach konsumiert.
+
 ### Dedup: Parallele Logger desselben Raids
 Zwei Reports vom selben Tag in derselben Zone mit Kill-Konflikten wurden als „zwei Raids hintereinander" interpretiert (z.B. Manual-Report + offizieller Gildenlog desselben SSC/TK-Abends). Neue Regel: Wenn der zweite Report startet, während der erste **noch läuft** (Zeitfenster überlappen), wird er als parallelen Logger derselben Session behandelt und gemerged — egal ob Kill-Konflikt. Erst wenn ein klarer Zeit-Gap zwischen den Reports liegt, greift die Split-Logik wieder.
 
