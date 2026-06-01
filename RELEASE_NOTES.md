@@ -1,5 +1,10 @@
 # Release Notes
 
+## 2026-06-01
+
+### Dedup: Parallele Logger desselben Raids
+Zwei Reports vom selben Tag in derselben Zone mit Kill-Konflikten wurden als „zwei Raids hintereinander" interpretiert (z.B. Manual-Report + offizieller Gildenlog desselben SSC/TK-Abends). Neue Regel: Wenn der zweite Report startet, während der erste **noch läuft** (Zeitfenster überlappen), wird er als parallelen Logger derselben Session behandelt und gemerged — egal ob Kill-Konflikt. Erst wenn ein klarer Zeit-Gap zwischen den Reports liegt, greift die Split-Logik wieder.
+
 ## 2026-05-29
 
 ### Windfury-Erkennung über Aura statt Damage-Event

@@ -825,13 +825,19 @@
           const reportEnd = r.end || (r.start + (Math.max(...fights.map(f => f.end_time || 0), 0)));
           let mustSplit = false;
           if (current) {
-            // Kill-Konflikt: gleicher Boss bereits gekillt in current
-            for (const b of killBosses) {
-              if (current.killedBosses.has(b)) { mustSplit = true; break; }
-            }
-            // Zeit-Gap zu groß
-            if (!mustSplit && (r.start - current.endTime) > RAID_GAP_THRESHOLD_MS) {
-              mustSplit = true;
+            // Parallel-Logs derselben Session: zweiter Report startet, während current noch läuft
+            // → nicht splitten egal ob Kill-Konflikt (verschiedene Logger desselben Raids loggen
+            // identische Kills, das ist KEIN zweiter Raid).
+            const overlapsWithCurrent = r.start < current.endTime;
+            if (!overlapsWithCurrent) {
+              // Kill-Konflikt: gleicher Boss bereits gekillt in current
+              for (const b of killBosses) {
+                if (current.killedBosses.has(b)) { mustSplit = true; break; }
+              }
+              // Zeit-Gap zu groß
+              if (!mustSplit && (r.start - current.endTime) > RAID_GAP_THRESHOLD_MS) {
+                mustSplit = true;
+              }
             }
           }
           if (!current || mustSplit) {
