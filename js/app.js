@@ -599,7 +599,16 @@
   // Raid-Day-Key — basiert auf Wochentag (1=Mo .. 7=So).
   // Wird gegen raidSchedule abgeglichen.
   function getRaidDayKey(timestamp) {
-    const dow = new Date(timestamp).getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const d = new Date(timestamp);
+    // Reports die zwischen 00:00 und 06:00 starten gehören logisch zum Vortag —
+    // das ist ein Raid der spät startete oder dessen Logger nach Mitternacht hochkam.
+    // (Niemand schedulet einen Raid um 02:00 morgens.)
+    if (d.getHours() < 6) {
+      const prev = new Date(d.getTime() - 24 * 60 * 60 * 1000);
+      const dow = prev.getDay();
+      return dow === 0 ? 7 : dow;
+    }
+    const dow = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
     return dow === 0 ? 7 : dow; // ISO-Weekday (1=Mo..7=So)
   }
   // Rückwärtskompatibel: Manche Code-Pfade nutzen noch 'mon'/'tue'/'thu' Strings.
@@ -634,6 +643,7 @@
     // Reports zu Schedule-Buckets matchen (Match auf dayOfWeek + raidSize)
     const bucketed = new Map(); // key: idx in cardEntries → Reports[]
     const unmatched10 = []; // 10-Mans die in keinem Bucket landen
+    const unmatchedOther = []; // alle anderen Sizes ohne Schedule-Match (sonst silently dropped)
     for (const r of tbcReports) {
       const z = CLA_DATA.zones[r.zone];
       const size = z.size;
@@ -650,6 +660,7 @@
       }
       if (!matched) {
         if (size === 10) unmatched10.push(r);
+        else unmatchedOther.push(r);
       }
     }
 
@@ -770,7 +781,14 @@
         await renderReportTables('#reports-other-10', unmatched10, '#no-reports-other-10');
       }
     }
-    hide('#section-other');
+    // „Sonstige"-Karte für Reports die in keinen Schedule-Slot passen und nicht 10er sind
+    if (unmatchedOther.length) {
+      const sec = $('#section-other');
+      if (sec) sec.classList.remove('hidden');
+      await renderReportTables('#reports-other', unmatchedOther, null, true);
+    } else {
+      hide('#section-other');
+    }
   }
 
   function renderReportTables(containerId, reports, emptyMsgId, groupByDate, missingWeeks) {

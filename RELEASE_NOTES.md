@@ -1,5 +1,12 @@
 # Release Notes
 
+## 2026-06-02
+
+### Dashboard: Mitternachts-Raids landen wieder im richtigen Slot
+Reports deren WCL-Logging erst nach Mitternacht startete (z.B. ein Donnerstag-Raid der überzog und im Log als Freitag 00:00 erscheint) wurden bisher dem falschen Wochentag zugeordnet und fielen so durch alle Schedule-Buckets durch — silent dropped.
+- `getRaidDayKey` zählt Start-Zeiten zwischen 00:00 und 06:00 jetzt zum **Vortag**.
+- Zusätzlich gibt's eine „Sonstige"-Sektion als Fallback für Reports, die in keinen Schedule-Slot passen und auch nicht 10-Mann sind — damit nichts mehr verschwindet.
+
 ## 2026-06-01
 
 ### Statistik: Flask/Elixir/Food werden nicht mehr pro Fight gezählt
