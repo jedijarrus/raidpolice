@@ -2567,8 +2567,21 @@ body.girly-mode .butterfly { opacity: 0.9; }
 .release-notes strong { color: var(--text); font-weight: 600; }
 .release-notes hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
 
-.cons-overview-all { padding: 12px; background: rgba(0,0,0,0.18); border-radius: var(--radius); }
-.cons-overview-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.cons-filter-row { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+.cons-filter-btn {
+  padding: 5px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cons-filter-btn:hover:not(:disabled) { background: var(--bg-hover); }
+.cons-filter-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+.cons-filter-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .consumes-grid {
   display: grid;

@@ -1534,29 +1534,23 @@
     try { window.$WowheadPower.refreshLinks(); } catch (e) {}
   }
 
-  function renderConsumableResults(results, overviewAll) {
+  function renderConsumableResults(results, consumablesTrash) {
     const container = $('#consumables-results');
     if (!results.length) { container.innerHTML = '<p class="text-muted">Keine Ergebnisse.</p>'; return; }
+    // Daten in Closure stashen, damit Filter-Toggle ohne Re-Fetch funktioniert
+    window._consumesBossData = results;
+    window._consumesTrashData = consumablesTrash || null;
+    window._consumesFilter = window._consumesFilter || 'boss';
+    renderConsumesView();
+  }
 
-    // Komplettübersicht (Boss + Trash, alle Items inkl. Engi/Class-exclusive) — wenn vorhanden
-    let overviewHtml = '';
-    if (overviewAll && Array.isArray(overviewAll.items) && overviewAll.items.length) {
-      const items = overviewAll.items.slice().sort((a, b) => (b.total || 0) - (a.total || 0));
-      const sumAll = items.reduce((s, i) => s + (i.total || 0), 0);
-      const renderIcon = (i) => {
-        const inner = i.total > 1 ? `<span class="cons-icon-count">${i.total}</span>` : '';
-        if (i.itemId) return `<span class="cons-icon-wrap" title="${escapeHtml(i.label)} ×${i.total}"><a href="https://www.wowhead.com/tbc/item=${i.itemId}" data-wowhead="item=${i.itemId}&amp;domain=tbc" class="cons-icon-link" rel="np">${escapeHtml(i.label)}</a>${inner}</span>`;
-        if (i.spellId) return `<span class="cons-icon-wrap" title="${escapeHtml(i.label)} ×${i.total}"><a href="https://www.wowhead.com/tbc/spell=${i.spellId}" data-wowhead="spell=${i.spellId}" class="cons-icon-link" rel="np">${escapeHtml(i.label)}</a>${inner}</span>`;
-        return `<span class="cons-text-fallback" title="${escapeHtml(i.label)}">${i.total}× ${escapeHtml(i.label)}</span>`;
-      };
-      overviewHtml = `<div class="cons-overview-all" style="margin-bottom:16px">
-        <h3 class="section-title">Komplettübersicht — Boss + Trash (${sumAll.toLocaleString('de-DE')} Items über ${overviewAll.fightCount} Fights)</h3>
-        <p class="text-muted" style="margin:-6px 0 8px">Alle verbrauchten Items inkl. Engineering, Healthstones, Mana-Gems etc. — ohne Slacker-Filter.</p>
-        <div class="cons-overview-grid">${items.map(renderIcon).join('')}</div>
-      </div>`;
-    }
+  function renderConsumesView() {
+    const container = $('#consumables-results');
+    const results = window._consumesBossData || [];
+    const trashData = window._consumesTrashData;
+    const filter = window._consumesFilter || 'boss';
+    const trashAvailable = trashData && Array.isArray(trashData) && trashData.length > 0;
 
-    // Aggregiere alle Items pro Spieler aus den fight-details
     const renderIcon = (c) => {
       const inner = c.uses > 1 ? `<span class="cons-icon-count">${c.uses}</span>` : '';
       if (c.itemId) return `<span class="cons-icon-wrap" title="${escapeHtml(c.label)} ×${c.uses}"><a href="https://www.wowhead.com/tbc/item=${c.itemId}" data-wowhead="item=${c.itemId}&amp;domain=tbc" class="cons-icon-link" rel="np">${escapeHtml(c.label)}</a>${inner}</span>`;
@@ -1564,15 +1558,32 @@
       return `<span class="cons-text-fallback" title="${escapeHtml(c.label)}">${c.uses}× ${escapeHtml(c.label)}</span>`;
     };
 
+    const includeBoss = (filter === 'boss' || filter === 'both');
+    const includeTrash = (filter === 'trash' || filter === 'both') && trashAvailable;
+    const trashByName = trashAvailable ? new Map(trashData.map(t => [t.name, t])) : new Map();
+
     const aggregated = results.map(r => {
       const itemMap = new Map();
-      for (const fd of (r.fightDetails || [])) {
-        if (!fd || !fd.consumables) continue;
-        for (const c of fd.consumables) {
-          const key = c.itemId ? `i${c.itemId}` : c.spellId ? `s${c.spellId}` : `n${c.label}`;
-          const ex = itemMap.get(key);
-          if (ex) ex.uses += (c.uses || 0);
-          else itemMap.set(key, { ...c });
+      if (includeBoss) {
+        for (const fd of (r.fightDetails || [])) {
+          if (!fd || !fd.consumables) continue;
+          for (const c of fd.consumables) {
+            const key = c.itemId ? `i${c.itemId}` : c.spellId ? `s${c.spellId}` : `n${c.label}`;
+            const ex = itemMap.get(key);
+            if (ex) ex.uses += (c.uses || 0);
+            else itemMap.set(key, { ...c });
+          }
+        }
+      }
+      if (includeTrash) {
+        const t = trashByName.get(r.name);
+        if (t && Array.isArray(t.items)) {
+          for (const c of t.items) {
+            const key = c.itemId ? `i${c.itemId}` : c.spellId ? `s${c.spellId}` : `n${c.label}`;
+            const ex = itemMap.get(key);
+            if (ex) ex.uses += (c.uses || 0);
+            else itemMap.set(key, { ...c });
+          }
         }
       }
       const items = [...itemMap.values()].sort((a, b) => b.uses - a.uses);
@@ -1585,30 +1596,40 @@
     const slackerThreshold = Math.ceil(primusTotal * (thresholdPct / 100));
     const primusName = aggregated.length ? aggregated[0].name : '';
 
-    let html = overviewHtml;
-    if (overviewHtml) html += '<h3 class="section-title" style="margin-top:18px">Slacker-Wertung (Boss-Fights, gefiltert)</h3>';
+    function fbtn(val, label, disabled) {
+      const active = filter === val && !disabled;
+      return `<button class="cons-filter-btn${active ? ' active' : ''}" data-cons-filter="${val}"${disabled ? ' disabled' : ''}>${label}</button>`;
+    }
+    let html = `<div class="cons-filter-row">
+      ${fbtn('boss', 'Boss')}
+      ${fbtn('trash', 'Trash', !trashAvailable)}
+      ${fbtn('both', 'Beides', !trashAvailable)}
+      ${!trashAvailable ? '<span class="text-muted" style="margin-left:8px;font-size:0.8rem">Trash-Daten noch nicht analysiert</span>' : ''}
+    </div>`;
+    html += '<h3 class="section-title">Übersicht</h3>';
     if (primusTotal > 0) {
-      html += `<div class="cons-summary-meta">Primus: <strong>${escapeHtml(primusName)}</strong> (${primusTotal}) · Slacker-Schwelle: &lt; ${slackerThreshold} Items (${thresholdPct}%)</div>`;
+      html += `<div class="cons-summary-meta">Primus: <strong>${escapeHtml(primusName)}</strong> (${primusTotal}) · Schwelle: &lt; ${slackerThreshold} Items (${thresholdPct}%)</div>`;
     }
     html += '<table class="results-table cons-summary-table"><thead><tr><th>Spieler</th><th>Klasse</th><th>Fights</th><th>Consumables</th><th>Σ Bezahlt</th></tr></thead><tbody>';
-    let slackerDividerShown = false;
+    let underThresholdShown = false;
     for (let ri = 0; ri < aggregated.length; ri++) {
       const r = aggregated[ri];
-      const isSlacker = primusTotal > 0 && r.totalPaid < slackerThreshold;
-      if (isSlacker && !slackerDividerShown) {
-        html += `<tr class="slacker-divider-row"><td colspan="5"><div class="slacker-divider"><span class="slacker-divider-line"></span><span class="slacker-divider-label">⚠ Slacker — unter ${thresholdPct}% vom Primus (&lt; ${slackerThreshold})</span><span class="slacker-divider-line"></span></div></td></tr>`;
-        slackerDividerShown = true;
+      const isUnderThreshold = primusTotal > 0 && r.totalPaid < slackerThreshold;
+      if (isUnderThreshold && !underThresholdShown) {
+        html += `<tr class="slacker-divider-row"><td colspan="5"><div class="slacker-divider"><span class="slacker-divider-line"></span><span class="slacker-divider-label">⚠ Unter ${thresholdPct}% vom Primus (&lt; ${slackerThreshold})</span><span class="slacker-divider-line"></span></div></td></tr>`;
+        underThresholdShown = true;
       }
       const cn = classNameFromType(r.type);
       const css = classCssFromType(r.type);
-      const hasDetails = r.fightDetails && r.fightDetails.some(fd => fd && fd.consumables && fd.consumables.length);
+      // Per-Fight expand nur sinnvoll für Boss-Modus (Trash hat keine per-fight Granularität)
+      const hasDetails = filter === 'boss' && r.fightDetails && r.fightDetails.some(fd => fd && fd.consumables && fd.consumables.length);
       const iconsHtml = r.items.length ? r.items.map(renderIcon).join('') : '<span class="text-muted">—</span>';
-      html += `<tr class="buff-summary-row${hasDetails ? ' expandable' : ''}${isSlacker ? ' is-slacker' : ''}" data-cons-idx="${ri}">`;
+      html += `<tr class="buff-summary-row${hasDetails ? ' expandable' : ''}${isUnderThreshold ? ' is-slacker' : ''}" data-cons-idx="${ri}">`;
       html += `<td class="${css}">${hasDetails ? '<span class="expand-arrow">&#9654;</span> ' : ''}${renderPlayerName(r.name)}</td>`;
       html += `<td class="${css}">${cn}</td>`;
       html += `<td>${r.playerFightCount}</td>`;
       html += `<td class="cons-items-cell">${iconsHtml}</td>`;
-      html += `<td><span class="raid-cons-total${isSlacker ? ' raid-cons-total--low' : ''}">${r.totalPaid}</span></td>`;
+      html += `<td><span class="raid-cons-total${isUnderThreshold ? ' raid-cons-total--low' : ''}">${r.totalPaid}</span></td>`;
       html += `</tr>`;
 
       if (hasDetails) {
@@ -1630,6 +1651,16 @@
     }
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    container.querySelectorAll('[data-cons-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        const v = btn.getAttribute('data-cons-filter');
+        if (v === window._consumesFilter) return;
+        window._consumesFilter = v;
+        renderConsumesView();
+      });
+    });
 
     container.querySelectorAll('.buff-summary-row.expandable').forEach(row => {
       row.addEventListener('click', () => {
@@ -7851,39 +7882,16 @@
       `<td class="stats-medal-1">1</td><td>${renderPlayerName('Casinotesse')}</td><td><strong>1</strong></td>`,
     ]));
 
-    // 🧪 Consumes-Übersicht — zwei Sichten:
-    //   A) Slacker-relevant (Boss-only, gefiltert nach excludedIds)
-    //   B) Komplettübersicht (Boss + Trash, alles inkl. Engi/Class-exclusive)
+    // 🧪 Consumes-Übersicht (gesamtes Pool aller Reports, Slacker-Filter aktiv)
     const totalUses = [...totalFlasks.values(), ...totalBattle.values(), ...totalGuardian.values(), ...totalFood.values()].reduce((s,n)=>s+n, 0)
                     + [...totalConsItems.values()].reduce((s,e)=>s+e.count, 0);
     if (totalUses > 0) {
-      groups.consumes.push(`<div class="stats-section stats-section--cons-overview"><h4 class="stats-subtitle">A) Slacker-Wertung (Boss-Fights, Slacker-Filter aktiv)</h4>` +
-        `<p class="text-muted" style="margin-top:-4px">${totalUses.toLocaleString('de-DE')} relevante Anwendungen über ${aggReportCount} Raids.</p></div>`);
+      groups.consumes.push(`<div class="stats-section stats-section--cons-overview"><h4 class="stats-subtitle">Übersicht</h4>` +
+        `<p class="text-muted" style="margin-top:-4px">${totalUses.toLocaleString('de-DE')} Anwendungen über ${aggReportCount} Raids — aggregiert über alle Spieler.</p></div>`);
       groups.consumes.push(consTable('Flasks', totalFlasks, false));
       groups.consumes.push(consTable('Battle-Elixiere', totalBattle, false));
       groups.consumes.push(consTable('Guardian-Elixiere', totalGuardian, false));
       groups.consumes.push(consTable('Potions / Runes / Sonstige', totalConsItems, true));
-    }
-
-    // Komplettübersicht: aus allen analysis.consumablesAll Bundles
-    const totalAllItems = new Map(); // label -> { cat, count, itemId, spellId }
-    let totalAllFightCount = 0;
-    for (const { bundle } of bundles) {
-      const all = bundle.analysis && bundle.analysis.consumablesAll;
-      if (!all || !Array.isArray(all.items)) continue;
-      totalAllFightCount += all.fightCount || 0;
-      for (const it of all.items) {
-        if (!totalAllItems.has(it.label)) {
-          totalAllItems.set(it.label, { cat: it.cat || 'other', count: 0, itemId: it.itemId, spellId: it.spellId });
-        }
-        totalAllItems.get(it.label).count += it.total || 0;
-      }
-    }
-    if (totalAllItems.size) {
-      const sumAll = [...totalAllItems.values()].reduce((s, e) => s + e.count, 0);
-      groups.consumes.push(`<div class="stats-section stats-section--cons-overview"><h4 class="stats-subtitle">B) Komplettübersicht (Boss + Trash, alle Items)</h4>` +
-        `<p class="text-muted" style="margin-top:-4px">${sumAll.toLocaleString('de-DE')} Anwendungen über ${totalAllFightCount} Fights (Boss + Trash).</p></div>`);
-      groups.consumes.push(consTable('Alle Consumes (inkl. Engineering, Healthstones, Mana-Gems etc.)', totalAllItems, true));
     }
 
     // -- Floor Tank Award (deaths per raid attended) --

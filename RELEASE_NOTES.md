@@ -2,6 +2,16 @@
 
 ## 2026-06-03
 
+### Consumables-Tab: Filter Boss/Trash/Beides
+Statt der separaten „Komplettübersicht"-Sektion gibt's jetzt im Consumables-Tab eines Reports oben drei Buttons **Boss · Trash · Beides**. Je nach Auswahl wird die Übersichtstabelle mit den entsprechenden Daten gerendert:
+- **Boss** (Default): nur Boss-Fights, per-Fight expandable wie bisher.
+- **Trash**: aggregiert über alle Trash-Fights pro Spieler — kein Per-Fight-Detail (wäre bei 70+ Trash-Fights zu teuer).
+- **Beides**: Boss + Trash Items zusammengefasst pro Spieler. Threshold/Slacker-Logik gilt auf die Gesamtsumme.
+
+Sektion wurde umbenannt auf einfach „Übersicht" (vorher „Slacker-Wertung"). Threshold-Marker als „Unter X% vom Primus" Divider weiterhin sichtbar.
+
+Backend: neue Analyse-Type `consumablesTrash` ersetzt das alte `consumablesAll` (Raid-weite Aggregation), liefert per-Spieler aggregierte Items aus Trash-Fights. Backfill auf alle Reports erfolgt beim nächsten Pre-Analyzer-Cycle.
+
 ### Consumes-Slacker-Wertung admin-konfigurierbar + neue Defaults + zwei Analysen
 Auf GM-Anforderung umstrukturiert: die Slacker-Wertung ist jetzt voll konfigurierbar **und** wird in zwei separate Analysen aufgeteilt.
 

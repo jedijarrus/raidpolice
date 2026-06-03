@@ -1054,38 +1054,41 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
   return results;
 }
 
-// Komplettübersicht über ALLE Fights (Boss + Trash). Liefert nur Raid-Total pro Item,
-// keine per-player Granularität — die Anforderung ist „was wurde insgesamt im Raid genommen".
-async function analyzeConsumablesAll(reportCode, allFights, playerList) {
-  const totals = new Map(); // label → { label, cat, itemId, spellId, total }
-  function bump(info, n, spellIdHint) {
-    if (!info) return;
-    const key = info.label;
-    if (!totals.has(key)) {
-      totals.set(key, { label: info.label, cat: info.cat, itemId: info.item || null, spellId: spellIdHint || null, total: 0 });
-    }
-    totals.get(key).total += n || 0;
+// Per-Player Consume-Summary für TRASH-Fights. Im Gegensatz zu analyzeConsumables
+// keine per-fight-Granularität — bei 70+ Trash-Fights × 25 Spielern wären die
+// per-fight Buff-Queries zu teuer. Liefert pro Spieler eine aggregierte Item-Liste,
+// das reicht für die Slacker-Wertung „Trash" und „Beides".
+async function analyzeConsumablesTrashSummary(reportCode, trashFights, playerList) {
+  const playerItems = new Map(); // playerName -> Map<key, {label, cat, uses, itemId, spellId}>
+  const idToName = new Map(playerList.map(p => [p.id, p.name]));
+  function bumpForPlayer(playerName, info, n, spellIdHint) {
+    if (!playerName || !info) return;
+    if (!playerItems.has(playerName)) playerItems.set(playerName, new Map());
+    const im = playerItems.get(playerName);
+    const key = info.item ? `i${info.item}` : `s${spellIdHint}`;
+    if (!im.has(key)) im.set(key, { label: info.label, cat: info.cat, uses: 0, itemId: info.item || null, spellId: spellIdHint || null });
+    im.get(key).uses += n || 1;
   }
 
-  // 1) Cast-Events pro Fight (V2 GraphQL, kostet pro Fight 1 Query + Pagination)
+  // 1) Cast-Events pro Trash-Fight (V2)
   const filterStr = `ability.id IN (${CONSUMABLE_CAST_FILTER_IDS.join(',')})`;
-  for (const f of allFights) {
+  for (const f of trashFights) {
     let events = [];
     try {
       events = await fetchCastEventsV2(reportCode, f.id, filterStr);
     } catch (e) {
-      console.warn(`[v2] all-fights cast events failed for fight ${f.id}: ${e.message}`);
+      console.warn(`[v2] trash cast events failed for fight ${f.id}: ${e.message}`);
+      continue;
     }
     for (const ev of events) {
       const gid = ev.abilityGameID;
-      if (!gid) continue;
       const info = CONSUMABLE_CAST_LOOKUP[gid];
-      if (info) bump(info, 1, gid);
+      if (!info) continue;
+      bumpForPlayer(idToName.get(ev.sourceID), info, 1, gid);
     }
   }
 
-  // 2) Buff-basierte Consumes (Destruction Pot, Haste Pot etc. die als Aura getrackt sind)
-  //    Report-wide Buff-Query pro Spieler — Bands zählen wir als Apply-Count.
+  // 2) Buff-basierte Consumes: report-wide pro Spieler, Bands die ein Trash-Fight überlappen
   for (const player of playerList) {
     let buffs;
     try {
@@ -1096,14 +1099,23 @@ async function analyzeConsumablesAll(reportCode, allFights, playerList) {
     for (const a of (buffs.auras || [])) {
       const info = CONSUMABLE_BUFF_LOOKUP[a.guid];
       if (!info) continue;
-      // Bands ≈ wie oft der Buff appliziert wurde — wenn keine Bands, mindestens 1 Apply
-      const applyCount = Math.max(1, (a.bands || []).length);
-      bump(info, applyCount, a.guid);
+      let count = 0;
+      for (const band of (a.bands || [])) {
+        for (const f of trashFights) {
+          if (band.startTime <= f.end_time && band.endTime >= f.start_time) { count++; break; }
+        }
+      }
+      if (count > 0) bumpForPlayer(player.name, info, count, a.guid);
     }
   }
 
-  const items = [...totals.values()].sort((a, b) => b.total - a.total);
-  return { items, fightCount: allFights.length };
+  const results = [];
+  for (const player of playerList) {
+    const im = playerItems.get(player.name);
+    const items = im ? [...im.values()].sort((a, b) => b.uses - a.uses) : [];
+    results.push({ name: player.name, type: player.type, items, fightCount: trashFights.length });
+  }
+  return results;
 }
 
 async function analyzeConsumables(reportCode, bossFights, playerList) {
@@ -3055,7 +3067,7 @@ async function processReport(reportCode) {
   // Every analysis below depends on bossFights.length. If an earlier run cached
   // these while the raid was still in progress, later runs must invalidate and
   // recompute — otherwise cached analyses stay frozen on a subset of fights.
-  const PER_FIGHT_TYPES = ['gear', 'buffs', 'consumables', 'consumablesAll', 'spellranks',
+  const PER_FIGHT_TYPES = ['gear', 'buffs', 'consumables', 'consumablesTrash', 'spellranks',
                            'deaths', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes',
                            'trinkets', 'cooldowns'];
 
@@ -3086,7 +3098,7 @@ async function processReport(reportCode) {
   const needGear = !hasCached('gear');
   const needBuffs = !hasCached('buffs');
   const needCons = !hasCached('consumables');
-  const needConsAll = !hasCached('consumablesAll');
+  const needConsAll = !hasCached('consumablesTrash');
   const needSpellRanks = !hasCached('spellranks');
   const needDeaths = !hasCached('deaths');
   const needDmgHeal = !hasCached('dmgheal');
@@ -3175,23 +3187,17 @@ async function processReport(reportCode) {
     } catch (e) { console.error(`[PRE] ${reportCode}: consumables failed:`, e.message); }
   }
 
-  // Komplettübersicht: Consumes über ALLE Fights (Bosse + Trash) — separat aggregiert
-  // damit die Slacker-Wertung (Boss-only, gefiltert) und die „was wurde insgesamt verbraucht"-
-  // Übersicht (alles inkl. Trash) zwei Datensätze haben.
+  // Per-Player Consume-Summary für TRASH-Fights — für den Filter „Trash" / „Beides"
+  // in der Consumables-Übersicht. Hat keine per-fight-Granularität (wäre bei 70+
+  // Trash-Fights × 25 Spielern zu teuer), nur per-player aggregiert.
   if (needConsAll) {
-    reportStep({ reportCode, step: 'consumablesAll' });
+    reportStep({ reportCode, step: 'consumablesTrash' });
     try {
-      const allFights = (reportData.fights || []).filter(f => {
-        // Trash-Fights haben size: undefined → immer rein. Boss-Fights nach Raid-Größe filtern,
-        // damit z.B. Karazhan-Bosse nicht in einen 25er-Report leaken.
-        if (!f.boss || f.boss <= 0) return true;
-        if (!reportSize) return true;
-        return reportSize >= 25 ? (f.size || 0) >= 25 : (f.size || 0) < 25;
-      });
-      const result = await analyzeConsumablesAll(reportCode, allFights, playerList);
-      cache.putAnalysis(reportCode, 'consumablesAll', sh, JSON.stringify(result));
-      console.log(`[PRE] ${reportCode}: consumablesAll done (${result.items.length} item-types over ${allFights.length} fights)`);
-    } catch (e) { console.error(`[PRE] ${reportCode}: consumablesAll failed:`, e.message); }
+      const trashFights = (reportData.fights || []).filter(f => !f.boss || f.boss <= 0);
+      const result = await analyzeConsumablesTrashSummary(reportCode, trashFights, playerList);
+      cache.putAnalysis(reportCode, 'consumablesTrash', sh, JSON.stringify(result));
+      console.log(`[PRE] ${reportCode}: consumablesTrash done (${result.length} players over ${trashFights.length} trash fights)`);
+    } catch (e) { console.error(`[PRE] ${reportCode}: consumablesTrash failed:`, e.message); }
   }
 
   if (needSpellRanks) {
