@@ -2567,6 +2567,9 @@ body.girly-mode .butterfly { opacity: 0.9; }
 .release-notes strong { color: var(--text); font-weight: 600; }
 .release-notes hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
 
+.cons-overview-all { padding: 12px; background: rgba(0,0,0,0.18); border-radius: var(--radius); }
+.cons-overview-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
 .consumes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

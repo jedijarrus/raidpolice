@@ -3086,6 +3086,7 @@ async function processReport(reportCode) {
   const needGear = !hasCached('gear');
   const needBuffs = !hasCached('buffs');
   const needCons = !hasCached('consumables');
+  const needConsAll = !hasCached('consumablesAll');
   const needSpellRanks = !hasCached('spellranks');
   const needDeaths = !hasCached('deaths');
   const needDmgHeal = !hasCached('dmgheal');
@@ -3096,7 +3097,7 @@ async function processReport(reportCode) {
   const needTrinkets = !hasCached('trinkets');
   const needCooldowns = !hasCached('cooldowns');
 
-  if (!needGear && !needBuffs && !needCons && !needSpellRanks && !needDeaths && !needDmgHeal && !needDmgTaken && !needDrums && !needAvoidable && !needWipes && !needTrinkets && !needCooldowns && hasReportData) {
+  if (!needGear && !needBuffs && !needCons && !needConsAll && !needSpellRanks && !needDeaths && !needDmgHeal && !needDmgTaken && !needDrums && !needAvoidable && !needWipes && !needTrinkets && !needCooldowns && hasReportData) {
     return false; // already fully analyzed and report has not grown
   }
 
@@ -3177,12 +3178,13 @@ async function processReport(reportCode) {
   // Komplettübersicht: Consumes über ALLE Fights (Bosse + Trash) — separat aggregiert
   // damit die Slacker-Wertung (Boss-only, gefiltert) und die „was wurde insgesamt verbraucht"-
   // Übersicht (alles inkl. Trash) zwei Datensätze haben.
-  const needConsAll = !hasCached('consumablesAll');
   if (needConsAll) {
     reportStep({ reportCode, step: 'consumablesAll' });
     try {
       const allFights = (reportData.fights || []).filter(f => {
-        // Selbe Größen-Filterung wie bossFights aber ohne boss-Bedingung
+        // Trash-Fights haben size: undefined → immer rein. Boss-Fights nach Raid-Größe filtern,
+        // damit z.B. Karazhan-Bosse nicht in einen 25er-Report leaken.
+        if (!f.boss || f.boss <= 0) return true;
         if (!reportSize) return true;
         return reportSize >= 25 ? (f.size || 0) >= 25 : (f.size || 0) < 25;
       });

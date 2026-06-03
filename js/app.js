@@ -1126,7 +1126,7 @@
       }
 
       if (analysis.consumables) {
-        renderConsumableResults(analysis.consumables);
+        renderConsumableResults(analysis.consumables, analysis.consumablesAll);
         setStatus('#consumables-status', 'Consumable-Analyse geladen.');
       } else {
         $('#consumables-results').innerHTML = '<p class="text-muted">Consumable-Analyse noch nicht verfuegbar.</p>';
@@ -1534,9 +1534,27 @@
     try { window.$WowheadPower.refreshLinks(); } catch (e) {}
   }
 
-  function renderConsumableResults(results) {
+  function renderConsumableResults(results, overviewAll) {
     const container = $('#consumables-results');
     if (!results.length) { container.innerHTML = '<p class="text-muted">Keine Ergebnisse.</p>'; return; }
+
+    // Komplettübersicht (Boss + Trash, alle Items inkl. Engi/Class-exclusive) — wenn vorhanden
+    let overviewHtml = '';
+    if (overviewAll && Array.isArray(overviewAll.items) && overviewAll.items.length) {
+      const items = overviewAll.items.slice().sort((a, b) => (b.total || 0) - (a.total || 0));
+      const sumAll = items.reduce((s, i) => s + (i.total || 0), 0);
+      const renderIcon = (i) => {
+        const inner = i.total > 1 ? `<span class="cons-icon-count">${i.total}</span>` : '';
+        if (i.itemId) return `<span class="cons-icon-wrap" title="${escapeHtml(i.label)} ×${i.total}"><a href="https://www.wowhead.com/tbc/item=${i.itemId}" data-wowhead="item=${i.itemId}&amp;domain=tbc" class="cons-icon-link" rel="np">${escapeHtml(i.label)}</a>${inner}</span>`;
+        if (i.spellId) return `<span class="cons-icon-wrap" title="${escapeHtml(i.label)} ×${i.total}"><a href="https://www.wowhead.com/tbc/spell=${i.spellId}" data-wowhead="spell=${i.spellId}" class="cons-icon-link" rel="np">${escapeHtml(i.label)}</a>${inner}</span>`;
+        return `<span class="cons-text-fallback" title="${escapeHtml(i.label)}">${i.total}× ${escapeHtml(i.label)}</span>`;
+      };
+      overviewHtml = `<div class="cons-overview-all" style="margin-bottom:16px">
+        <h3 class="section-title">Komplettübersicht — Boss + Trash (${sumAll.toLocaleString('de-DE')} Items über ${overviewAll.fightCount} Fights)</h3>
+        <p class="text-muted" style="margin:-6px 0 8px">Alle verbrauchten Items inkl. Engineering, Healthstones, Mana-Gems etc. — ohne Slacker-Filter.</p>
+        <div class="cons-overview-grid">${items.map(renderIcon).join('')}</div>
+      </div>`;
+    }
 
     // Aggregiere alle Items pro Spieler aus den fight-details
     const renderIcon = (c) => {
@@ -1567,9 +1585,10 @@
     const slackerThreshold = Math.ceil(primusTotal * (thresholdPct / 100));
     const primusName = aggregated.length ? aggregated[0].name : '';
 
-    let html = '';
+    let html = overviewHtml;
+    if (overviewHtml) html += '<h3 class="section-title" style="margin-top:18px">Slacker-Wertung (Boss-Fights, gefiltert)</h3>';
     if (primusTotal > 0) {
-      html += `<div class="cons-summary-meta">Primus: <strong>${escapeHtml(primusName)}</strong> (${primusTotal}) · Slacker-Schwelle: &lt; ${slackerThreshold} Items</div>`;
+      html += `<div class="cons-summary-meta">Primus: <strong>${escapeHtml(primusName)}</strong> (${primusTotal}) · Slacker-Schwelle: &lt; ${slackerThreshold} Items (${thresholdPct}%)</div>`;
     }
     html += '<table class="results-table cons-summary-table"><thead><tr><th>Spieler</th><th>Klasse</th><th>Fights</th><th>Consumables</th><th>Σ Bezahlt</th></tr></thead><tbody>';
     let slackerDividerShown = false;
@@ -1577,7 +1596,7 @@
       const r = aggregated[ri];
       const isSlacker = primusTotal > 0 && r.totalPaid < slackerThreshold;
       if (isSlacker && !slackerDividerShown) {
-        html += `<tr class="slacker-divider-row"><td colspan="5"><div class="slacker-divider"><span class="slacker-divider-line"></span><span class="slacker-divider-label">⚠ Slacker — unter 25% vom Primus (&lt; ${slackerThreshold})</span><span class="slacker-divider-line"></span></div></td></tr>`;
+        html += `<tr class="slacker-divider-row"><td colspan="5"><div class="slacker-divider"><span class="slacker-divider-line"></span><span class="slacker-divider-label">⚠ Slacker — unter ${thresholdPct}% vom Primus (&lt; ${slackerThreshold})</span><span class="slacker-divider-line"></span></div></td></tr>`;
         slackerDividerShown = true;
       }
       const cn = classNameFromType(r.type);
