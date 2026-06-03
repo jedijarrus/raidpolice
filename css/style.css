@@ -3076,6 +3076,36 @@ body.girly-mode .butterfly { opacity: 0.9; }
   border-color: var(--accent, #f59e0b);
   background: linear-gradient(180deg, rgba(245,158,11,0.04), rgba(245,158,11,0));
 }
+.elixir-card.is-collapsed .elixir-card__edit { display: none; }
+.elixir-card:not(.is-collapsed) .elixir-card__summary { display: none; }
+.elixir-card:not(.is-collapsed) .elixir-card__toggle[data-action="expand"] { display: none; }
+.elixir-card__head-right { display: flex; align-items: center; gap: 8px; }
+.elixir-card__toggle {
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.15s;
+}
+.elixir-card__toggle:hover { background: var(--bg-hover); }
+.elixir-card__summary { display: flex; flex-direction: column; gap: 4px; }
+.elixir-pillrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 0.78rem; }
+.elixir-pillrow__label { color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 2px; }
+.elixir-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.3);
+  color: var(--text);
+  font-size: 0.74rem;
+}
+.elixir-card__edit-foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); text-align: right; }
 .elixir-card__head {
   display: flex;
   align-items: center;

@@ -6315,6 +6315,14 @@
     const SPEC_CATEGORY = { tank:'tank', healer:'heal', balance:'caster', elemental:'caster', feral:'melee', enhancement:'melee', retribution:'melee', dps:'dps' };
     const CATEGORY_LABEL = { tank:'Tank', heal:'Heal', caster:'Caster-DPS', melee:'Melee-DPS', dps:'DPS' };
 
+    // Lookup-Map: id → displayName (für Pill-Summary)
+    function lookupName(id) {
+      for (const list of [observed.flasks, observed.battleElixirs, observed.guardianElixirs]) {
+        for (const it of (list || [])) if (it.id === id) return elixirDisplayName({ id: it.id, name: it.name });
+      }
+      return '#' + id;
+    }
+
     let html = '<div class="elixir-policy-grid">';
     for (const [cls, clsRoles] of grouped) {
       const css = classCssFromType(cls);
@@ -6330,11 +6338,26 @@
         const modeBadge = p.mode === 'flask-only' ? 'Nur Flask'
                         : p.mode === 'whitelist' ? 'Whitelist'
                         : 'Any';
-        html += `<div class="elixir-card${p.mode!=='any'?' elixir-card--active':''}" data-role="${escapeHtml(role)}">`;
+        // Pill-Summary für eingeklappte Sicht
+        function pillsFor(field, label) {
+          const ids = p[field] || [];
+          if (!ids.length) return '';
+          const names = ids.map(lookupName);
+          return `<div class="elixir-pillrow"><span class="elixir-pillrow__label">${label}:</span>${names.map(n => `<span class="elixir-pill">${escapeHtml(n)}</span>`).join('')}</div>`;
+        }
+        const summaryHtml = p.mode === 'any'
+          ? '<div class="elixir-card__summary text-muted">Any — jede Flask oder Battle+Guardian zählt.</div>'
+          : `<div class="elixir-card__summary">${pillsFor('flaskAllowed','Flasks')}${pillsFor('battleAllowed','Battle')}${pillsFor('guardianAllowed','Guardian')}</div>`;
+        html += `<div class="elixir-card${p.mode!=='any'?' elixir-card--active':''} is-collapsed" data-role="${escapeHtml(role)}">`;
         html += `<div class="elixir-card__head">`;
         html += `<div><div class="elixir-card__role ${css}">${escapeHtml(specLabel)}</div>`;
         html += `<div class="elixir-card__cat elixir-card__cat--${cat}">${catLabel}</div></div>`;
-        html += `<span class="elixir-card__modebadge">${modeBadge}</span></div>`;
+        html += `<div class="elixir-card__head-right"><span class="elixir-card__modebadge">${modeBadge}</span>`;
+        html += `<button type="button" class="elixir-card__toggle" data-action="expand">Ändern</button></div>`;
+        html += `</div>`;
+        html += summaryHtml;
+        // Edit-Bereich (initial hidden via is-collapsed)
+        html += '<div class="elixir-card__edit">';
         html += '<div class="elixir-card__modes" role="radiogroup">';
         for (const [m, label] of [['any','Any'],['flask-only','Nur Flask'],['whitelist','Whitelist']]) {
           html += `<button type="button" class="elixir-mode-btn${p.mode===m?' is-active':''}" data-mode="${m}">${label}</button>`;
@@ -6354,7 +6377,6 @@
           html += `<div class="elixir-list__items">`;
           if (!items.length) html += '<span class="text-muted">—</span>';
           for (const it of items) {
-            const idKey = it.id != null ? String(it.id) : 'n_' + it.name;
             const isChk = it.id != null ? allow.has(it.id) : allow.has(it.name);
             const cnt = it.count > 99 ? '99+' : it.count;
             const idAttr = it.id != null ? `data-id="${it.id}"` : `data-name="${escapeHtml(it.name)}"`;
@@ -6366,14 +6388,27 @@
           }
           html += '</div></div>';
         }
-        html += '</div></div>';
+        html += '</div>'; // close lists
+        html += '<div class="elixir-card__edit-foot"><button type="button" class="elixir-card__toggle" data-action="collapse">Fertig</button></div>';
+        html += '</div>'; // close edit
+        html += '</div>'; // close card
       }
       html += '</div></div>'; // close class-section__cards + class-section
     }
     html += '</div>';
     host.innerHTML = html;
 
-    // Wire interactions
+    // Wire: collapse/expand toggle
+    host.querySelectorAll('.elixir-card__toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.elixir-card');
+        if (!card) return;
+        if (btn.dataset.action === 'expand') card.classList.remove('is-collapsed');
+        else card.classList.add('is-collapsed');
+      });
+    });
+
+    // Wire interactions (mode-buttons + checkboxes)
     host.querySelectorAll('.elixir-card').forEach(card => {
       const modeBtns = card.querySelectorAll('.elixir-mode-btn');
       const lists = card.querySelector('.elixir-card__lists');
