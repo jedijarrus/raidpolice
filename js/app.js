@@ -1845,13 +1845,18 @@
       const cn = classNameFromType(r.type);
       const css = classCssFromType(r.type);
       const hasDetails = r.fightDetails && r.fightDetails.length > 0;
-      // Pre-compute scroll expected/actual counts across fights
+      // Scroll-Bilanz: NUR die erforderlichen Scrolls pro Fight zählen.
+      // Bonus-Scrolls (z.B. Protection auf Feral) und Lücken (fehlende Stats) werden
+      // korrekt abgebildet — `required-present` aus (required − missing).
       let scrollExpected = 0;
+      let scrollHavePresent = 0;
       if (r.fightDetails) {
         for (const fd of r.fightDetails) {
           if (!fd) continue;
           const req = BUFF_IDS.scrollRequired[fd.roleKey] || [];
+          const missing = (fd.missingScrolls || []).length;
           scrollExpected += req.length;
+          scrollHavePresent += Math.max(0, req.length - missing);
         }
       }
       html += `<tr class="buff-summary-row${hasDetails ? ' expandable' : ''}" data-buff-idx="${ri}">`;
@@ -1861,13 +1866,13 @@
         const count = r[cat.key];
         const total = r.playerFightCount;
         if (cat.key === 'scrolls') {
-          // Scrolls: show "have/expected" format
+          // Scrolls: have/expected, wobei have = nur die erforderlichen vorhandenen Scrolls
           const hasIssue = r.hasLowRankScrolls || r.hasMissingScrolls;
           if (scrollExpected > 0) {
-            const pct = Math.round(count / scrollExpected * 100);
-            html += `<td class="${CLA_DATA.pctClass(pct)}">${count}/${scrollExpected}${hasIssue ? ' ⚠' : ''}</td>`;
+            const pct = Math.round(scrollHavePresent / scrollExpected * 100);
+            html += `<td class="${CLA_DATA.pctClass(pct)}">${scrollHavePresent}/${scrollExpected}${hasIssue ? ' ⚠' : ''}</td>`;
           } else {
-            // No scroll requirement — show "—" unless they have some, then show count
+            // Keine Scroll-Pflicht — Bonus-Scrolls falls vorhanden anzeigen, sonst —
             html += `<td>${count > 0 ? count : '—'}</td>`;
           }
         } else {
