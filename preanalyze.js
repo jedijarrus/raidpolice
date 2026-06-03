@@ -139,14 +139,23 @@ const BUFF_IDS = {
   },
   scrollBestRank: {Agility:33077,Intellect:33078,Protection:33079,Spirit:33080,Stamina:33081,Strength:33082},
   scrollRequired: {
-    'Warrior:dps':['Agility','Strength'],'Rogue:dps':['Agility','Strength'],
-    'Paladin:retribution':['Agility','Strength'],'Paladin:dps':['Agility','Strength'],
-    'Druid:feral':['Agility','Strength'],'Druid:dps':['Agility','Strength'],
-    'Druid:balance':[],'Druid:healer':[],
-    'Shaman:enhancement':['Agility','Strength'],'Shaman:elemental':[],'Shaman:dps':['Agility','Strength'],
-    'Hunter:dps':['Agility'],
-    'Warrior:tank':['Agility','Strength','Protection'],'Paladin:tank':['Agility','Strength','Protection'],
-    'Druid:tank':['Agility','Strength','Protection'],'HunterPet':['Agility','Strength'],
+    // Klassen mit nur einem DPS-Spec → Class:dps
+    'Warrior:dps':         ['Agility','Strength'],
+    'Rogue:dps':           ['Agility','Strength'],
+    'Hunter:dps':          ['Agility'],
+    // Hybrid-Klassen → konkreter Spec-Key (kein generisches :dps)
+    'Paladin:retribution': ['Agility','Strength'],
+    'Druid:feral':         ['Agility','Strength'],
+    'Druid:balance':       [],
+    'Druid:healer':        [],
+    'Shaman:enhancement':  ['Agility','Strength'],
+    'Shaman:elemental':    [],
+    // Tanks
+    'Warrior:tank':        ['Agility','Strength','Protection'],
+    'Paladin:tank':        ['Agility','Strength','Protection'],
+    'Druid:tank':          ['Agility','Strength','Protection'],
+    // HunterPet — vom Buff-System auf Pets gemerged
+    'HunterPet':           ['Agility','Strength'],
   },
   weaponEnhancement: [25122,25123,25121,25120,28017,28016,25119,29453,29452,22756,16138,12164,34340,34339,16622,12163,27187,27186,26891,26892,26969,27283,27282,26790,26786,26785,26884,25584,25583],
 };
