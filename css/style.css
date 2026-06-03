@@ -2567,6 +2567,48 @@ body.girly-mode .butterfly { opacity: 0.9; }
 .release-notes strong { color: var(--text); font-weight: 600; }
 .release-notes hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
 
+.cd-not-expected {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  vertical-align: middle;
+  cursor: help;
+}
+.cd-expect-row {
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.cd-expect-row:first-child { border-top: none; }
+.cd-expect-row__head { font-size: 0.85rem; margin-bottom: 6px; }
+.cd-expect-row__cds { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.cd-expect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: background 0.15s, opacity 0.15s, border-color 0.15s;
+}
+.cd-expect-chip.is-checked {
+  opacity: 1;
+  background: rgba(245,158,11,0.12);
+  border-color: rgba(245,158,11,0.4);
+}
+.cd-expect-chip input { margin: 0; width: 12px; height: 12px; }
+.cd-expect-chip span { line-height: 1.1; }
+
 .cons-filter-row { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
 .cons-filter-btn {
   padding: 5px 14px;

@@ -5086,19 +5086,113 @@
     }
     html += '</tbody></table></details>';
 
-    // CD-Role-Erwartungen (für Slacker-Detection)
-    const expectations = cfg.liveCdRoleExpectations || {};
-    html += `<details><summary><strong>🎯 CD-Slacker-Erwartungen pro Role:Spec</strong></summary>`;
-    html += '<table class="results-table"><thead><tr><th>Role:Spec</th><th>Erwartete CDs</th></tr></thead><tbody>';
-    for (const [role, keys] of Object.entries(expectations)) {
-      const names = keys.map(k => cds[k]?.name || k).join(', ');
-      html += `<tr><td><code>${escapeHtml(role)}</code></td><td>${escapeHtml(names) || '<em>—</em>'}</td></tr>`;
-    }
-    html += '</tbody></table></details>';
+    // CD-Role-Erwartungen — editierbar
+    const defaults = cfg.liveCdRoleExpectations || {};
+    const allCdKeys = Object.keys(cds);
+    html += `<details open><summary><strong>🎯 CD-Erwartungen pro Role:Spec</strong> <span class="text-muted">(editierbar — was hier erwartet ist, fließt in die Slacker-Wertung ein)</span></summary>`;
+    html += '<div id="cd-expectations-editor"><p class="text-muted">Lade aktuelle Einstellungen...</p></div>';
+    html += '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;padding-top:14px;border-top:1px solid var(--border)">';
+    html += '<button id="btn-cd-expect-save" class="penalty-btn penalty-btn--add">Speichern</button>';
+    html += '<button id="btn-cd-expect-reset" class="penalty-btn">Auf Defaults zurücksetzen</button>';
+    html += '<span id="cd-expect-status" class="penalty-card__status"></span>';
+    html += '</div>';
+    html += '</details>';
 
     html += '</div>';
     host.innerHTML = html;
     try { window.$WowheadPower.refreshLinks(); } catch (e) {}
+
+    // CD-Expectations Editor wireup
+    loadCdExpectationsEditor(cds, defaults, allCdKeys);
+  }
+
+  async function loadCdExpectationsEditor(cdDefs, defaults, allCdKeys) {
+    const host = $('#cd-expectations-editor');
+    if (!host) return;
+    let currentOverrides = null;
+    try {
+      const r = await apiFetch('/api/cd-expectations');
+      if (r.ok) currentOverrides = (await r.json()).overrides;
+    } catch (_) {}
+    // Effective state: pro Rolle die Liste der erwarteten Keys (Override > Default)
+    function effective(role) {
+      if (currentOverrides && Object.prototype.hasOwnProperty.call(currentOverrides, role)) return currentOverrides[role];
+      return defaults[role] || [];
+    }
+    const roles = Object.keys(defaults).sort();
+    const specOrder = { tank: 1, healer: 2, balance: 3, elemental: 3, feral: 4, enhancement: 4, retribution: 4, dps: 5 };
+    roles.sort((a, b) => {
+      const [ca, sa] = a.split(':'); const [cb, sb] = b.split(':');
+      if (ca !== cb) return ca.localeCompare(cb);
+      return (specOrder[sa] || 9) - (specOrder[sb] || 9);
+    });
+
+    let html = '';
+    for (const role of roles) {
+      const eff = new Set(effective(role));
+      const [cls, spec] = role.split(':');
+      const css = classCssFromType(cls);
+      html += `<div class="cd-expect-row" data-role="${escapeHtml(role)}">`;
+      html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(spec)}</span></div>`;
+      html += '<div class="cd-expect-row__cds">';
+      // alle CDs anzeigen, role-passende vorne; user kann jeden für jede Rolle markieren
+      const sortedKeys = allCdKeys.slice().sort((a, b) => {
+        const da = cdDefs[a], db = cdDefs[b];
+        return (da?.role || '').localeCompare(db?.role || '') || (da?.name || '').localeCompare(db?.name || '');
+      });
+      for (const key of sortedKeys) {
+        const def = cdDefs[key];
+        if (!def) continue;
+        const checked = eff.has(key);
+        html += `<label class="cd-expect-chip${checked ? ' is-checked' : ''}" title="${escapeHtml(def.name)} (${def.role})"><input type="checkbox" data-cd-key="${escapeHtml(key)}" ${checked ? 'checked' : ''}><span>${escapeHtml(def.name)}</span></label>`;
+      }
+      html += '</div></div>';
+    }
+    host.innerHTML = html;
+    host.querySelectorAll('.cd-expect-chip input').forEach(cb => {
+      cb.addEventListener('change', () => cb.closest('.cd-expect-chip').classList.toggle('is-checked', cb.checked));
+    });
+
+    const saveBtn = $('#btn-cd-expect-save');
+    const resetBtn = $('#btn-cd-expect-reset');
+    const status = $('#cd-expect-status');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const overrides = {};
+        host.querySelectorAll('.cd-expect-row').forEach(row => {
+          const role = row.getAttribute('data-role');
+          const keys = [...row.querySelectorAll('input[data-cd-key]:checked')].map(cb => cb.getAttribute('data-cd-key'));
+          overrides[role] = keys;
+        });
+        status.textContent = 'Speichere...';
+        try {
+          const r = await apiFetch('/api/admin/cd-expectations', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ overrides }),
+          });
+          if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'HTTP ' + r.status); }
+          status.textContent = 'Gespeichert.';
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
+    if (resetBtn && !resetBtn._wired) {
+      resetBtn._wired = true;
+      resetBtn.addEventListener('click', async () => {
+        if (!confirm('Alle CD-Erwartungen auf die Default-Werte zurücksetzen?')) return;
+        try {
+          const r = await apiFetch('/api/admin/cd-expectations', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ overrides: {} }),
+          });
+          if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'HTTP ' + r.status); }
+          currentOverrides = null;
+          status.textContent = 'Zurückgesetzt.';
+          // Re-render mit Defaults
+          loadCdExpectationsEditor(cdDefs, defaults, allCdKeys);
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
   }
 
   async function loadWipesAdmin() {

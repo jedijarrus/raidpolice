@@ -315,13 +315,29 @@ const LIVE_CD_ROLE_EXPECTATIONS = {
   'Paladin:tank':        ['avengingWrath'],
   'Druid:balance':       ['forceOfNature', 'naturesSwiftness'],
   'Druid:healer':        ['innervate', 'tranquility', 'naturesSwiftness'],
-  'Druid:feral':         ['frenziedRegen'],
+  'Druid:feral':         [],
   'Shaman:elemental':    ['elementalMastery', 'naturesSwiftness'],
   // Enhancement: Shamanistic Rage (Enh-deep), KEIN Elemental Mastery (Elem-deep talent)
   'Shaman:enhancement':  ['shamanisticRage'],
   'Shaman:healer':       ['manaTide', 'naturesSwiftness'],
   // Warlock + Druid:cat hat keine 2-8min DPS-CDs → nicht ausgewertet
 };
+
+// Liefert die erwarteten CD-Keys für eine Rolle — Admin-Override (Setting `cdRoleExpectations`)
+// hat Vorrang vor dem Default. Wenn die Rolle im Setting existiert, gilt deren Liste — auch
+// wenn sie leer ist (= explizit „keine CDs erwartet").
+function getExpectedCdsForRole(role) {
+  try {
+    const raw = cache.getSetting('cdRoleExpectations');
+    if (raw) {
+      const overrides = JSON.parse(raw) || {};
+      if (overrides && Object.prototype.hasOwnProperty.call(overrides, role)) {
+        return Array.isArray(overrides[role]) ? overrides[role] : [];
+      }
+    }
+  } catch (_) {}
+  return LIVE_CD_ROLE_EXPECTATIONS[role] || [];
+}
 
 // ── ON-USE Trinkets: Spell-ID → {itemId, name} ──
 const ONUSE_TRINKETS = {
@@ -2975,7 +2991,7 @@ async function analyzeCooldownUsage(reportCode, bossFights, playerList) {
       const role = summary ? getPlayerFightRole(summary, p.name, p.type) : null;
       if (!role) continue;
       p.rolesByFight[f.id] = role;
-      const expected = LIVE_CD_ROLE_EXPECTATIONS[role] || [];
+      const expected = getExpectedCdsForRole(role);
       for (const k of expected) {
         p.eligibleFights[k] = (p.eligibleFights[k] || 0) + 1;
       }
@@ -3759,7 +3775,7 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
   const cdSlackers = [];
   for (const p of players) {
     const role = getPlayerFightRole(summary, p.name, p.type);
-    const expected = LIVE_CD_ROLE_EXPECTATIONS[role] || [];
+    const expected = getExpectedCdsForRole(role);
     const cm = cdCastMap.get(p.id) || {};
     const usedKeys = Object.keys(cm);
     if (usedKeys.length > 0) {
