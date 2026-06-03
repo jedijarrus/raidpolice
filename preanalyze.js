@@ -593,8 +593,21 @@ function getPlayerFightRole(summary, playerName, playerType) {
   return playerType + ':dps';
 }
 
+function getScrollRequirementsForRole(roleKey) {
+  try {
+    const raw = cache.getSetting('scrollRequirements');
+    if (raw) {
+      const overrides = JSON.parse(raw) || {};
+      if (overrides && Object.prototype.hasOwnProperty.call(overrides, roleKey)) {
+        return Array.isArray(overrides[roleKey]) ? overrides[roleKey] : [];
+      }
+    }
+  } catch (_) {}
+  return BUFF_IDS.scrollRequired[roleKey] || [];
+}
+
 function getMissingScrolls(scrollEntries, roleKey) {
-  const required = BUFF_IDS.scrollRequired[roleKey];
+  const required = getScrollRequirementsForRole(roleKey);
   if (!required || !required.length) return [];
   const haveStats = new Set();
   for (const s of scrollEntries) {

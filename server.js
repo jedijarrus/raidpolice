@@ -1959,6 +1959,42 @@ async function handleRequest(req, res) {
   }
 
   // ─── Public: Elixier-Policy lesen (für Buff-Filter im Frontend) ───
+  // ─── Scroll-Anforderungen pro Class:Spec ───
+  if (parsed.pathname === '/api/scroll-requirements' && req.method === 'GET') {
+    let overrides = null;
+    const raw = cache.getSetting('scrollRequirements');
+    if (raw) { try { overrides = JSON.parse(raw); } catch (_) {} }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ overrides: overrides && typeof overrides === 'object' ? overrides : null }));
+    return;
+  }
+  if (parsed.pathname === '/api/admin/scroll-requirements' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      if (!body.overrides || typeof body.overrides !== 'object' || Array.isArray(body.overrides)) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'overrides muss ein Objekt sein' }));
+        return;
+      }
+      const ALLOWED_STATS = ['Agility','Strength','Intellect','Protection','Spirit','Stamina'];
+      const sanitized = {};
+      for (const [role, list] of Object.entries(body.overrides)) {
+        if (typeof role !== 'string' || !role.includes(':')) continue;
+        if (!Array.isArray(list)) continue;
+        sanitized[role] = list.filter(s => ALLOWED_STATS.includes(s));
+      }
+      cache.putSetting('scrollRequirements', JSON.stringify(sanitized));
+      logAction(req, 'scroll_requirements_save', Object.keys(sanitized).length + ' roles');
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true, roleCount: Object.keys(sanitized).length }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
   // ─── CD-Role-Erwartungen ───
   if (parsed.pathname === '/api/cd-expectations' && req.method === 'GET') {
     let overrides = null;

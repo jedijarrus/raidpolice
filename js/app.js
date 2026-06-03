@@ -171,8 +171,14 @@
   }
 
   /** Compute missing required scrolls for a fight */
+  function getScrollRequirementsForRole(roleKey) {
+    if (window._scrollRequirementOverrides && Object.prototype.hasOwnProperty.call(window._scrollRequirementOverrides, roleKey)) {
+      return Array.isArray(window._scrollRequirementOverrides[roleKey]) ? window._scrollRequirementOverrides[roleKey] : [];
+    }
+    return BUFF_IDS.scrollRequired[roleKey] || [];
+  }
   function getMissingScrolls(scrollEntries, roleKey) {
-    const required = BUFF_IDS.scrollRequired[roleKey];
+    const required = getScrollRequirementsForRole(roleKey);
     if (!required || !required.length) return [];
     const haveStats = new Set();
     for (const s of scrollEntries) {
@@ -1853,7 +1859,7 @@
       if (r.fightDetails) {
         for (const fd of r.fightDetails) {
           if (!fd) continue;
-          const req = BUFF_IDS.scrollRequired[fd.roleKey] || [];
+          const req = getScrollRequirementsForRole(fd.roleKey);
           const missing = (fd.missingScrolls || []).length;
           scrollExpected += req.length;
           scrollHavePresent += Math.max(0, req.length - missing);
@@ -2516,7 +2522,7 @@
 
     // Scrolls: check required scrolls for this player's role
     const roleKey = getPlayerFightRole(summaryData, playerData.name, playerData.type);
-    const requiredScrolls = BUFF_IDS.scrollRequired[roleKey];
+    const requiredScrolls = getScrollRequirementsForRole(roleKey);
     if (requiredScrolls && requiredScrolls.length) {
       result.scrollExpected = requiredScrolls.length;
       const scrollEntries = [];
@@ -5097,6 +5103,16 @@
     }
     html += '</tbody></table></details>';
 
+    // Scroll-Anforderungen — editierbar
+    html += `<details><summary><strong>📜 Scroll-Anforderungen pro Class:Spec</strong> <span class="text-muted">(editierbar — welche Scrolls in der Spalte „Scrolls" gefordert werden)</span></summary>`;
+    html += '<div id="scroll-req-editor"><p class="text-muted">Lade aktuelle Einstellungen...</p></div>';
+    html += '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;padding-top:14px;border-top:1px solid var(--border)">';
+    html += '<button id="btn-scroll-req-save" class="penalty-btn penalty-btn--add">Speichern</button>';
+    html += '<button id="btn-scroll-req-reset" class="penalty-btn">Auf Defaults zurücksetzen</button>';
+    html += '<span id="scroll-req-status" class="penalty-card__status"></span>';
+    html += '</div>';
+    html += '</details>';
+
     // CD-Role-Erwartungen — editierbar
     const defaults = cfg.liveCdRoleExpectations || {};
     const allCdKeys = Object.keys(cds);
@@ -5115,6 +5131,96 @@
 
     // CD-Expectations Editor wireup
     loadCdExpectationsEditor(cds, defaults, allCdKeys);
+    // Scroll-Requirements Editor wireup
+    loadScrollRequirementsEditor();
+  }
+
+  async function loadScrollRequirementsEditor() {
+    const host = $('#scroll-req-editor');
+    if (!host) return;
+    let overrides = null;
+    try {
+      const r = await apiFetch('/api/scroll-requirements');
+      if (r.ok) overrides = (await r.json()).overrides;
+    } catch (_) {}
+    const defaults = BUFF_IDS.scrollRequired || {};
+    function effective(role) {
+      if (overrides && Object.prototype.hasOwnProperty.call(overrides, role)) return overrides[role];
+      return defaults[role] || [];
+    }
+    const ALL_STATS = ['Agility','Strength','Intellect','Protection','Spirit','Stamina'];
+    // Rollen aus defaults + observed roles
+    const roleSet = new Set(Object.keys(defaults));
+    if (_elixirPolicyState && _elixirPolicyState.observed && Array.isArray(_elixirPolicyState.observed.roles)) {
+      for (const r of _elixirPolicyState.observed.roles) roleSet.add(normalizeRoleKey(r));
+    }
+    const roles = [...roleSet].filter(r => r && r.includes(':') && r !== 'HunterPet').sort();
+    const specOrder = { tank: 1, healer: 2, balance: 3, elemental: 3, feral: 4, enhancement: 4, retribution: 4, dps: 5 };
+    roles.sort((a, b) => {
+      const [ca, sa] = a.split(':'); const [cb, sb] = b.split(':');
+      if (ca !== cb) return ca.localeCompare(cb);
+      return (specOrder[sa] || 9) - (specOrder[sb] || 9);
+    });
+
+    let html = '';
+    for (const role of roles) {
+      const eff = new Set(effective(role));
+      const [cls, spec] = role.split(':');
+      const css = classCssFromType(cls);
+      html += `<div class="cd-expect-row" data-role="${escapeHtml(role)}">`;
+      html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(spec)}</span></div>`;
+      html += '<div class="cd-expect-row__cds">';
+      for (const stat of ALL_STATS) {
+        const checked = eff.has(stat);
+        html += `<label class="cd-expect-chip${checked ? ' is-checked' : ''}"><input type="checkbox" data-scroll-stat="${escapeHtml(stat)}" ${checked ? 'checked' : ''}><span>${escapeHtml(stat)}</span></label>`;
+      }
+      html += '</div></div>';
+    }
+    host.innerHTML = html;
+    host.querySelectorAll('.cd-expect-chip input').forEach(cb => {
+      cb.addEventListener('change', () => cb.closest('.cd-expect-chip').classList.toggle('is-checked', cb.checked));
+    });
+
+    const saveBtn = $('#btn-scroll-req-save');
+    const resetBtn = $('#btn-scroll-req-reset');
+    const status = $('#scroll-req-status');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const out = {};
+        host.querySelectorAll('.cd-expect-row').forEach(row => {
+          const role = row.getAttribute('data-role');
+          const stats = [...row.querySelectorAll('input[data-scroll-stat]:checked')].map(cb => cb.getAttribute('data-scroll-stat'));
+          out[role] = stats;
+        });
+        status.textContent = 'Speichere...';
+        try {
+          const r = await apiFetch('/api/admin/scroll-requirements', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ overrides: out }),
+          });
+          if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'HTTP ' + r.status); }
+          window._scrollRequirementOverrides = out;
+          status.textContent = 'Gespeichert.';
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
+    if (resetBtn && !resetBtn._wired) {
+      resetBtn._wired = true;
+      resetBtn.addEventListener('click', async () => {
+        if (!confirm('Alle Scroll-Anforderungen auf die Defaults zurücksetzen?')) return;
+        try {
+          const r = await apiFetch('/api/admin/scroll-requirements', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ overrides: {} }),
+          });
+          if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'HTTP ' + r.status); }
+          window._scrollRequirementOverrides = {};
+          status.textContent = 'Zurückgesetzt.';
+          loadScrollRequirementsEditor();
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
   }
 
   async function loadCdExpectationsEditor(cdDefs, defaults, allCdKeys) {
@@ -8380,6 +8486,14 @@
         if (Number.isFinite(j.thresholdPct)) window._consumesSlackerPct = j.thresholdPct;
       }
     } catch (_) { /* default fallback bleibt aktiv */ }
+    // Scroll-Requirement-Overrides laden
+    try {
+      const sr = await apiFetch('/api/scroll-requirements');
+      if (sr.ok) {
+        const j = await sr.json();
+        if (j.overrides && typeof j.overrides === 'object') window._scrollRequirementOverrides = j.overrides;
+      }
+    } catch (_) {}
   }
 
   // Generate girly mode particles
