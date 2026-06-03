@@ -1054,6 +1054,58 @@ async function analyzeBuffs(reportCode, bossFights, playerList, reportData) {
   return results;
 }
 
+// Komplettübersicht über ALLE Fights (Boss + Trash). Liefert nur Raid-Total pro Item,
+// keine per-player Granularität — die Anforderung ist „was wurde insgesamt im Raid genommen".
+async function analyzeConsumablesAll(reportCode, allFights, playerList) {
+  const totals = new Map(); // label → { label, cat, itemId, spellId, total }
+  function bump(info, n, spellIdHint) {
+    if (!info) return;
+    const key = info.label;
+    if (!totals.has(key)) {
+      totals.set(key, { label: info.label, cat: info.cat, itemId: info.item || null, spellId: spellIdHint || null, total: 0 });
+    }
+    totals.get(key).total += n || 0;
+  }
+
+  // 1) Cast-Events pro Fight (V2 GraphQL, kostet pro Fight 1 Query + Pagination)
+  const filterStr = `ability.id IN (${CONSUMABLE_CAST_FILTER_IDS.join(',')})`;
+  for (const f of allFights) {
+    let events = [];
+    try {
+      events = await fetchCastEventsV2(reportCode, f.id, filterStr);
+    } catch (e) {
+      console.warn(`[v2] all-fights cast events failed for fight ${f.id}: ${e.message}`);
+    }
+    for (const ev of events) {
+      const gid = ev.abilityGameID;
+      if (!gid) continue;
+      const info = CONSUMABLE_CAST_LOOKUP[gid];
+      if (info) bump(info, 1, gid);
+    }
+  }
+
+  // 2) Buff-basierte Consumes (Destruction Pot, Haste Pot etc. die als Aura getrackt sind)
+  //    Report-wide Buff-Query pro Spieler — Bands zählen wir als Apply-Count.
+  for (const player of playerList) {
+    let buffs;
+    try {
+      buffs = await wclApi(`/report/tables/buffs/${reportCode}`, {
+        start: 0, end: 9999999999, sourceid: player.id, translate: true
+      });
+    } catch (e) { continue; }
+    for (const a of (buffs.auras || [])) {
+      const info = CONSUMABLE_BUFF_LOOKUP[a.guid];
+      if (!info) continue;
+      // Bands ≈ wie oft der Buff appliziert wurde — wenn keine Bands, mindestens 1 Apply
+      const applyCount = Math.max(1, (a.bands || []).length);
+      bump(info, applyCount, a.guid);
+    }
+  }
+
+  const items = [...totals.values()].sort((a, b) => b.total - a.total);
+  return { items, fightCount: allFights.length };
+}
+
 async function analyzeConsumables(reportCode, bossFights, playerList) {
   const totalFights = bossFights.length;
   const totalPlayers = playerList.length;
@@ -3003,7 +3055,7 @@ async function processReport(reportCode) {
   // Every analysis below depends on bossFights.length. If an earlier run cached
   // these while the raid was still in progress, later runs must invalidate and
   // recompute — otherwise cached analyses stay frozen on a subset of fights.
-  const PER_FIGHT_TYPES = ['gear', 'buffs', 'consumables', 'spellranks',
+  const PER_FIGHT_TYPES = ['gear', 'buffs', 'consumables', 'consumablesAll', 'spellranks',
                            'deaths', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes',
                            'trinkets', 'cooldowns'];
 
@@ -3120,6 +3172,24 @@ async function processReport(reportCode) {
       cache.putAnalysis(reportCode, 'consumables', sh, JSON.stringify(result));
       console.log(`[PRE] ${reportCode}: consumables done (${result.length} players)`);
     } catch (e) { console.error(`[PRE] ${reportCode}: consumables failed:`, e.message); }
+  }
+
+  // Komplettübersicht: Consumes über ALLE Fights (Bosse + Trash) — separat aggregiert
+  // damit die Slacker-Wertung (Boss-only, gefiltert) und die „was wurde insgesamt verbraucht"-
+  // Übersicht (alles inkl. Trash) zwei Datensätze haben.
+  const needConsAll = !hasCached('consumablesAll');
+  if (needConsAll) {
+    reportStep({ reportCode, step: 'consumablesAll' });
+    try {
+      const allFights = (reportData.fights || []).filter(f => {
+        // Selbe Größen-Filterung wie bossFights aber ohne boss-Bedingung
+        if (!reportSize) return true;
+        return reportSize >= 25 ? (f.size || 0) >= 25 : (f.size || 0) < 25;
+      });
+      const result = await analyzeConsumablesAll(reportCode, allFights, playerList);
+      cache.putAnalysis(reportCode, 'consumablesAll', sh, JSON.stringify(result));
+      console.log(`[PRE] ${reportCode}: consumablesAll done (${result.items.length} item-types over ${allFights.length} fights)`);
+    } catch (e) { console.error(`[PRE] ${reportCode}: consumablesAll failed:`, e.message); }
   }
 
   if (needSpellRanks) {

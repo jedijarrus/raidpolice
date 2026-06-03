@@ -1563,7 +1563,8 @@
     }).sort((a, b) => b.totalPaid - a.totalPaid);
 
     const primusTotal = aggregated.length ? aggregated[0].totalPaid : 0;
-    const slackerThreshold = Math.ceil(primusTotal * 0.25);
+    const thresholdPct = Number.isFinite(window._consumesSlackerPct) ? window._consumesSlackerPct : DEFAULT_SLACKER_THRESHOLD_PCT;
+    const slackerThreshold = Math.ceil(primusTotal * (thresholdPct / 100));
     const primusName = aggregated.length ? aggregated[0].name : '';
 
     let html = '';
@@ -3641,9 +3642,21 @@
   }
 
   // Items die nicht in die "Σ Bezahlt"-Summe zählen — admin-konfigurierbar via consumesExcludedIds.
-  // Default-Ausschluss (wenn kein Setting gesetzt): Healthstones (R1-R3), Mana Emerald, Mana Ruby
-  // plus deren Cast-Spell-IDs.
-  const DEFAULT_FREE_CONJURED_IDS = [22105, 22104, 22103, 22044, 8008, 27235, 27236, 27237, 27101, 27103];
+  // Default-Ausschluss (wenn kein Setting gesetzt):
+  //   Healthstones R1-R3, Mana Emerald, Mana Ruby (klassen-exklusive / verschenkte Items),
+  //   Engineering-Items (Engi-Profession only),
+  //   Demonic Rune (Lock-exklusiv), Thistle Tea (Rogue-exklusiv).
+  const DEFAULT_FREE_CONJURED_IDS = [
+    // Healthstones + Mana Gems
+    22105, 22104, 22103, 22044, 8008,
+    27235, 27236, 27237, 27101, 27103,
+    // Engineering items (Profession-locked)
+    23827, 30486, 10646, 13241, 23737, 30217, 23736, 30216, 18641, 23063, 23841, 30526, 24268, 31367,
+    // Class-exclusive items
+    12662, 16666,        // Demonic Rune (Lock)
+    7676, 9512,          // Thistle Tea (Rogue)
+  ];
+  const DEFAULT_SLACKER_THRESHOLD_PCT = 35;
   function getExcludedConsumeIds() {
     if (Array.isArray(window._consumesExcludedIds)) return new Set(window._consumesExcludedIds);
     return new Set(DEFAULT_FREE_CONJURED_IDS);
@@ -3704,9 +3717,10 @@
     const totalConsUses = consPlayers.reduce((s, p) => s + p.total, 0);
     const totalTrinketUses = trinketPlayers.reduce((s, p) => s + p.total, 0);
     const consPrimus = consPlayers[0]?.total || 0;
-    const consSlackerTh = Math.ceil(consPrimus * 0.25);
+    const _thPct = Number.isFinite(window._consumesSlackerPct) ? window._consumesSlackerPct : DEFAULT_SLACKER_THRESHOLD_PCT;
+    const consSlackerTh = Math.ceil(consPrimus * (_thPct / 100));
     const trinketPrimus = trinketPlayers[0]?.total || 0;
-    const trinketSlackerTh = Math.ceil(trinketPrimus * 0.25);
+    const trinketSlackerTh = Math.ceil(trinketPrimus * (_thPct / 100));
 
     const renderColumn = (title, players, primusName, primus, slackerTh, totalU, sideClass) => {
       let h = `<div class="raid-summary-side ${sideClass}">`;
@@ -4735,9 +4749,10 @@
       ]);
       if (!catR.ok) { host.innerHTML = '<p class="text-muted">Tracking-Config nicht ladbar.</p>'; return; }
       const cfg = await catR.json();
-      const cur = curR.ok ? await curR.json() : { excludedIds: null };
-      const defaultExcluded = new Set([22105, 22104, 22103, 22044, 8008, 27235, 27236, 27237, 27101, 27103]);
-      const excluded = new Set(Array.isArray(cur.excludedIds) ? cur.excludedIds : [...defaultExcluded]);
+      const cur = curR.ok ? await curR.json() : { excludedIds: null, thresholdPct: null };
+      const excluded = new Set(Array.isArray(cur.excludedIds) ? cur.excludedIds : DEFAULT_FREE_CONJURED_IDS);
+      const thInput = $('#consumes-scoring-threshold');
+      if (thInput) thInput.value = String(Number.isFinite(cur.thresholdPct) ? cur.thresholdPct : DEFAULT_SLACKER_THRESHOLD_PCT);
       // Bekannte Consumes katalogisieren: itemId + spellId(s) pro Eintrag
       const entries = [];
       const seen = new Set();
@@ -4788,15 +4803,18 @@
           if (info.itemId) excludedIds.push(info.itemId);
           for (const sid of (info.spellIds || [])) excludedIds.push(sid);
         });
+        const thInput = $('#consumes-scoring-threshold');
+        const thresholdPct = thInput ? parseInt(thInput.value, 10) : null;
         try {
           const r = await apiFetch('/api/admin/consumes-scoring', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ excludedIds }),
+            body: JSON.stringify({ excludedIds, thresholdPct }),
           });
           if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'HTTP ' + r.status); }
           window._consumesExcludedIds = excludedIds;
-          status.textContent = 'Gespeichert (' + excludedIds.length + ' IDs ausgeschlossen).';
+          if (Number.isFinite(thresholdPct)) window._consumesSlackerPct = thresholdPct;
+          status.textContent = `Gespeichert (${excludedIds.length} IDs ausgeschlossen, Schwelle ${thresholdPct}%).`;
         } catch (e) { status.textContent = '✗ ' + e.message; }
       });
     }
@@ -7814,16 +7832,39 @@
       `<td class="stats-medal-1">1</td><td>${renderPlayerName('Casinotesse')}</td><td><strong>1</strong></td>`,
     ]));
 
-    // 🧪 Consumes-Übersicht (gesamtes Pool aller Reports)
+    // 🧪 Consumes-Übersicht — zwei Sichten:
+    //   A) Slacker-relevant (Boss-only, gefiltert nach excludedIds)
+    //   B) Komplettübersicht (Boss + Trash, alles inkl. Engi/Class-exclusive)
     const totalUses = [...totalFlasks.values(), ...totalBattle.values(), ...totalGuardian.values(), ...totalFood.values()].reduce((s,n)=>s+n, 0)
                     + [...totalConsItems.values()].reduce((s,e)=>s+e.count, 0);
     if (totalUses > 0) {
-      groups.consumes.push(`<div class="stats-section stats-section--cons-overview"><h4 class="stats-subtitle">Übersicht</h4>` +
-        `<p class="text-muted" style="margin-top:-4px">${totalUses.toLocaleString('de-DE')} Anwendungen über ${aggReportCount} Raids — aggregiert über alle Spieler.</p></div>`);
+      groups.consumes.push(`<div class="stats-section stats-section--cons-overview"><h4 class="stats-subtitle">A) Slacker-Wertung (Boss-Fights, Slacker-Filter aktiv)</h4>` +
+        `<p class="text-muted" style="margin-top:-4px">${totalUses.toLocaleString('de-DE')} relevante Anwendungen über ${aggReportCount} Raids.</p></div>`);
       groups.consumes.push(consTable('Flasks', totalFlasks, false));
       groups.consumes.push(consTable('Battle-Elixiere', totalBattle, false));
       groups.consumes.push(consTable('Guardian-Elixiere', totalGuardian, false));
-      groups.consumes.push(consTable('Potions / Runes / Engi / Sonstige', totalConsItems, true));
+      groups.consumes.push(consTable('Potions / Runes / Sonstige', totalConsItems, true));
+    }
+
+    // Komplettübersicht: aus allen analysis.consumablesAll Bundles
+    const totalAllItems = new Map(); // label -> { cat, count, itemId, spellId }
+    let totalAllFightCount = 0;
+    for (const { bundle } of bundles) {
+      const all = bundle.analysis && bundle.analysis.consumablesAll;
+      if (!all || !Array.isArray(all.items)) continue;
+      totalAllFightCount += all.fightCount || 0;
+      for (const it of all.items) {
+        if (!totalAllItems.has(it.label)) {
+          totalAllItems.set(it.label, { cat: it.cat || 'other', count: 0, itemId: it.itemId, spellId: it.spellId });
+        }
+        totalAllItems.get(it.label).count += it.total || 0;
+      }
+    }
+    if (totalAllItems.size) {
+      const sumAll = [...totalAllItems.values()].reduce((s, e) => s + e.count, 0);
+      groups.consumes.push(`<div class="stats-section stats-section--cons-overview"><h4 class="stats-subtitle">B) Komplettübersicht (Boss + Trash, alle Items)</h4>` +
+        `<p class="text-muted" style="margin-top:-4px">${sumAll.toLocaleString('de-DE')} Anwendungen über ${totalAllFightCount} Fights (Boss + Trash).</p></div>`);
+      groups.consumes.push(consTable('Alle Consumes (inkl. Engineering, Healthstones, Mana-Gems etc.)', totalAllItems, true));
     }
 
     // -- Floor Tank Award (deaths per raid attended) --
@@ -8150,12 +8191,13 @@
       }
       window._branding = b;
     } catch (_) { /* fail silent — defaults bleiben */ }
-    // Consumes-Scoring-Setting laden (welche IDs nicht in Σ Bezahlt zählen)
+    // Consumes-Scoring-Setting laden (welche IDs nicht in Σ Bezahlt zählen + Threshold %)
     try {
       const cs = await apiFetch('/api/consumes-scoring');
       if (cs.ok) {
         const j = await cs.json();
         if (Array.isArray(j.excludedIds)) window._consumesExcludedIds = j.excludedIds;
+        if (Number.isFinite(j.thresholdPct)) window._consumesSlackerPct = j.thresholdPct;
       }
     } catch (_) { /* default fallback bleibt aktiv */ }
   }

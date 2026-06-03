@@ -694,7 +694,11 @@
               </div>
             </div>
             <div id="consumes-scoring-editor"><p class="text-muted">Lade...</p></div>
-            <div style="margin-top:14px;display:flex;gap:10px;align-items:center;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="margin-top:14px;display:flex;gap:14px;align-items:center;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap">
+              <label class="penalty-field">
+                <span class="penalty-label">Slacker-Schwelle (% vom Primus)</span>
+                <input type="number" id="consumes-scoring-threshold" class="penalty-input" min="0" max="100" step="1" style="width:6em" value="35">
+              </label>
               <button id="btn-consumes-scoring-save" class="penalty-btn penalty-btn--add">Speichern</button>
               <span id="consumes-scoring-status" class="penalty-card__status"></span>
             </div>
@@ -1018,6 +1022,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=164"></script>
+  <script src="js/app.js?v=165"></script>
 </body>
 </html>

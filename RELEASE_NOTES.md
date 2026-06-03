@@ -2,11 +2,19 @@
 
 ## 2026-06-03
 
-### Consumes-Slacker-Wertung admin-konfigurierbar
-Bisher war die Liste der „free conjured"-Items (Healthstones / Mana-Gems), die nicht in die `Σ Bezahlt`-Summe und damit nicht in die Slacker-Schwelle einfließen, hartcodiert im Frontend. Jetzt gibt's einen Editor:
-- **Admin → Consumes / Edikt → Consumes — Slacker-Wertung**: Checkbox-Liste aller gettrackten Consumes (Combat-Pots, Mana, Health/Mana-Gems, Runen, Engineering, Sonstige). Häkchen = zählt in Σ Bezahlt; abgewählt = wird im Report nur angezeigt aber nicht mitgerechnet.
-- Default: bisheriger Ausschluss (Master Healthstone R1/R2/R3, Mana Emerald, Mana Ruby + deren Cast-Spell-IDs).
-- Die Stats-Tab-Übersicht respektiert die Einstellung jetzt auch (vorher inkonsistent mit dem Report-Tab).
+### Consumes-Slacker-Wertung admin-konfigurierbar + neue Defaults + zwei Analysen
+Auf GM-Anforderung umstrukturiert: die Slacker-Wertung ist jetzt voll konfigurierbar **und** wird in zwei separate Analysen aufgeteilt.
+
+**Konfiguration** (**Admin → Consumes / Edikt → Consumes — Slacker-Wertung**):
+- Checkbox-Liste aller getrackten Consumes (Combat-Pots, Mana, Health/Mana-Gems, Runen, Engineering, Sonstige). Häkchen = zählt in Σ Bezahlt; abgewählt = wird angezeigt aber nicht mitgerechnet.
+- Neue **Slacker-Schwelle**-Eingabe (% vom Primus). Default: **35%** (vorher hartcodiert 25%).
+- Erweiterte Default-Ausschlüsse: zusätzlich zu Healthstones / Mana-Gems jetzt auch **Engineering-Items** (Profession-gebunden) und **class-exclusive Items** (Demonic Rune = Lock, Thistle Tea = Rogue). Dark Rune bleibt drin (anyone caster).
+
+**Zwei Analysen** im Statistik-Tab:
+- **A) Slacker-Wertung** — nur Bossfights, gefiltert auf die slacker-relevanten Items. Liefert die „Σ Bezahlt"-Summen und die 25%/35%-Slacker-Schwelle.
+- **B) Komplettübersicht** — **alle** Fights inkl. Trash, **alle** Items inkl. Engineering/Healthstones/Mana-Gems. Zeigt was im Raid wirklich an Material verbraten wurde, ohne Slacker-Filter.
+
+**Backend**: Neue Analyse-Type `consumablesAll` im Pre-Analyzer aggregiert Cast-Events + Buff-Apply-Bands über alle Fights (Boss + Trash). Wird beim nächsten Pre-Analyzer-Lauf automatisch für alle Reports nachgezogen.
 
 ## 2026-06-02
 

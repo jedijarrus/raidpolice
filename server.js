@@ -1964,19 +1964,40 @@ async function handleRequest(req, res) {
     let excluded = null;
     const raw = cache.getSetting('consumesExcludedIds');
     if (raw) { try { excluded = JSON.parse(raw); } catch (_) {} }
+    const tRaw = cache.getSetting('consumesSlackerThresholdPct');
+    const thresholdPct = tRaw != null ? parseInt(tRaw, 10) : null;
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-    res.end(JSON.stringify({ excludedIds: Array.isArray(excluded) ? excluded : null }));
+    res.end(JSON.stringify({
+      excludedIds: Array.isArray(excluded) ? excluded : null,
+      thresholdPct: Number.isFinite(thresholdPct) ? thresholdPct : null,
+    }));
     return;
   }
   if (parsed.pathname === '/api/admin/consumes-scoring' && req.method === 'POST') {
     if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
     try {
       const body = JSON.parse(await readBody(req) || '{}');
-      const excluded = Array.isArray(body.excludedIds) ? body.excludedIds.filter(n => Number.isFinite(n)) : [];
+      if (!Array.isArray(body.excludedIds)) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'excludedIds muss ein Array sein' }));
+        return;
+      }
+      const excluded = body.excludedIds.filter(n => Number.isFinite(n) && n > 0 && n < 1e9);
       cache.putSetting('consumesExcludedIds', JSON.stringify(excluded));
-      logAction(req, 'consumes_scoring_save', excluded.length + ' excluded');
+      let savedThreshold = null;
+      if (body.thresholdPct != null) {
+        const t = parseInt(body.thresholdPct, 10);
+        if (!Number.isFinite(t) || t < 0 || t > 100) {
+          res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: 'thresholdPct muss zwischen 0 und 100 liegen' }));
+          return;
+        }
+        cache.putSetting('consumesSlackerThresholdPct', String(t));
+        savedThreshold = t;
+      }
+      logAction(req, 'consumes_scoring_save', `${excluded.length} excluded, threshold=${savedThreshold ?? 'unchanged'}`);
       res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-      res.end(JSON.stringify({ ok: true }));
+      res.end(JSON.stringify({ ok: true, excludedCount: excluded.length, thresholdPct: savedThreshold }));
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
       res.end(JSON.stringify({ error: e.message }));
