@@ -5135,16 +5135,29 @@
       html += `<div class="cd-expect-row" data-role="${escapeHtml(role)}">`;
       html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(spec)}</span></div>`;
       html += '<div class="cd-expect-row__cds">';
-      // alle CDs anzeigen, role-passende vorne; user kann jeden für jede Rolle markieren
-      const sortedKeys = allCdKeys.slice().sort((a, b) => {
-        const da = cdDefs[a], db = cdDefs[b];
-        return (da?.role || '').localeCompare(db?.role || '') || (da?.name || '').localeCompare(db?.name || '');
-      });
+      // Nur CDs der eigenen Klasse + Racials (cls='*') anzeigen
+      const sortedKeys = allCdKeys
+        .filter(k => {
+          const def = cdDefs[k];
+          if (!def) return false;
+          return def.cls === cls || def.cls === '*';
+        })
+        .sort((a, b) => {
+          const da = cdDefs[a], db = cdDefs[b];
+          // Class-CDs vor Racials, dann nach Rolle, dann Name
+          const ca = da.cls === '*' ? 1 : 0;
+          const cb = db.cls === '*' ? 1 : 0;
+          if (ca !== cb) return ca - cb;
+          return (da.role || '').localeCompare(db.role || '') || (da.name || '').localeCompare(db.name || '');
+        });
+      if (!sortedKeys.length) {
+        html += '<span class="text-muted" style="font-size:0.8rem">Keine CDs für diese Klasse definiert.</span>';
+      }
       for (const key of sortedKeys) {
         const def = cdDefs[key];
-        if (!def) continue;
         const checked = eff.has(key);
-        html += `<label class="cd-expect-chip${checked ? ' is-checked' : ''}" title="${escapeHtml(def.name)} (${def.role})"><input type="checkbox" data-cd-key="${escapeHtml(key)}" ${checked ? 'checked' : ''}><span>${escapeHtml(def.name)}</span></label>`;
+        const racialMarker = def.cls === '*' ? ' <small class="text-muted">(Racial)</small>' : '';
+        html += `<label class="cd-expect-chip${checked ? ' is-checked' : ''}" title="${escapeHtml(def.name)} (${def.role})"><input type="checkbox" data-cd-key="${escapeHtml(key)}" ${checked ? 'checked' : ''}><span>${escapeHtml(def.name)}${racialMarker}</span></label>`;
       }
       html += '</div></div>';
     }
