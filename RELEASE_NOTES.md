@@ -1,5 +1,13 @@
 # Release Notes
 
+## 2026-06-03
+
+### Consumes-Slacker-Wertung admin-konfigurierbar
+Bisher war die Liste der „free conjured"-Items (Healthstones / Mana-Gems), die nicht in die `Σ Bezahlt`-Summe und damit nicht in die Slacker-Schwelle einfließen, hartcodiert im Frontend. Jetzt gibt's einen Editor:
+- **Admin → Consumes / Edikt → Consumes — Slacker-Wertung**: Checkbox-Liste aller gettrackten Consumes (Combat-Pots, Mana, Health/Mana-Gems, Runen, Engineering, Sonstige). Häkchen = zählt in Σ Bezahlt; abgewählt = wird im Report nur angezeigt aber nicht mitgerechnet.
+- Default: bisheriger Ausschluss (Master Healthstone R1/R2/R3, Mana Emerald, Mana Ruby + deren Cast-Spell-IDs).
+- Die Stats-Tab-Übersicht respektiert die Einstellung jetzt auch (vorher inkonsistent mit dem Report-Tab).
+
 ## 2026-06-02
 
 ### Dashboard: Mitternachts-Raids landen wieder im richtigen Slot

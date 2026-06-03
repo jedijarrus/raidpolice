@@ -3640,10 +3640,20 @@
     }, 9000);
   }
 
-  // Items die "kostenlos" sind (selbst-conjured: Mana Gems, Healthstones) — zählen nicht zum Total
-  const FREE_CONJURED_ITEMS = new Set([22105, 22104, 22103, 22044, 8008]);
-  const FREE_CONJURED_SPELLS = new Set([27235, 27236, 27237, 27101, 27103]);
-  const isFreeConjured = (i) => (i.itemId && FREE_CONJURED_ITEMS.has(i.itemId)) || (i.spellId && FREE_CONJURED_SPELLS.has(i.spellId));
+  // Items die nicht in die "Σ Bezahlt"-Summe zählen — admin-konfigurierbar via consumesExcludedIds.
+  // Default-Ausschluss (wenn kein Setting gesetzt): Healthstones (R1-R3), Mana Emerald, Mana Ruby
+  // plus deren Cast-Spell-IDs.
+  const DEFAULT_FREE_CONJURED_IDS = [22105, 22104, 22103, 22044, 8008, 27235, 27236, 27237, 27101, 27103];
+  function getExcludedConsumeIds() {
+    if (Array.isArray(window._consumesExcludedIds)) return new Set(window._consumesExcludedIds);
+    return new Set(DEFAULT_FREE_CONJURED_IDS);
+  }
+  const isFreeConjured = (i) => {
+    const ex = getExcludedConsumeIds();
+    if (i.itemId && ex.has(i.itemId)) return true;
+    if (i.spellId && ex.has(i.spellId)) return true;
+    return false;
+  };
 
   function renderRaidConsumablesSummary(data) {
     if (!data.fights || !data.fights.length) return '';
@@ -4428,7 +4438,7 @@
   function loadAllAdmin() {
     loadAdminReports(); loadAdminPenalties(); loadAdminRevoked(); loadAdminExcused(); loadAdminExcusedPlayers(); loadAdminExcludedPlayers(); loadAdminPlayerRoles(); loadAdminJoinDates(); loadAdminChangelog(); loadSysinfo(); loadRaidDateDropdowns();
     loadDataStatus(); loadPipelineStatus(); loadElixirPolicyEditor(); loadTrackingConfig();
-    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl(); loadManualReports();
+    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl(); loadManualReports(); loadConsumesScoringEditor();
     if (adminRole === 'superadmin') loadAdminUsers();
   }
 
@@ -4707,6 +4717,86 @@
         try {
           await apiFetch('/api/admin/sim/stop', { method: 'POST' });
           setTimeout(refresh, 500);
+        } catch (e) { status.textContent = '✗ ' + e.message; }
+      });
+    }
+  }
+
+  // ─── Admin: Consumes Slacker-Wertung ───
+  async function loadConsumesScoringEditor() {
+    const host = $('#consumes-scoring-editor');
+    const saveBtn = $('#btn-consumes-scoring-save');
+    const status = $('#consumes-scoring-status');
+    if (!host || !saveBtn) return;
+    try {
+      const [catR, curR] = await Promise.all([
+        apiFetch('/api/admin/tracking-config'),
+        apiFetch('/api/consumes-scoring'),
+      ]);
+      if (!catR.ok) { host.innerHTML = '<p class="text-muted">Tracking-Config nicht ladbar.</p>'; return; }
+      const cfg = await catR.json();
+      const cur = curR.ok ? await curR.json() : { excludedIds: null };
+      const defaultExcluded = new Set([22105, 22104, 22103, 22044, 8008, 27235, 27236, 27237, 27101, 27103]);
+      const excluded = new Set(Array.isArray(cur.excludedIds) ? cur.excludedIds : [...defaultExcluded]);
+      // Bekannte Consumes katalogisieren: itemId + spellId(s) pro Eintrag
+      const entries = [];
+      const seen = new Set();
+      function addGroup(map) {
+        for (const def of Object.values(map || {})) {
+          if (!def || !def.label) continue;
+          const key = (def.item || '') + '|' + def.label;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          entries.push({ label: def.label, cat: def.cat || 'other', itemId: def.item || null, spellIds: def.ids || [] });
+        }
+      }
+      addGroup(cfg.consumableBuffs);
+      addGroup(cfg.consumableCasts);
+      // Gruppieren nach Kategorie
+      const byCat = {};
+      for (const e of entries) {
+        (byCat[e.cat] ||= []).push(e);
+      }
+      const catLabels = { pot:'Combat-Potions', mana:'Mana', health:'Health/Mana-Gems', rune:'Runen', engi:'Engineering', other:'Sonstige' };
+      const order = ['pot','mana','health','rune','engi','other'];
+      const rows = [];
+      for (const cat of order) {
+        const list = byCat[cat]; if (!list) continue;
+        rows.push(`<h4 style="margin:14px 0 4px;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em">${escapeHtml(catLabels[cat] || cat)}</h4>`);
+        rows.push('<div class="consumes-grid">');
+        for (const e of list.sort((a,b)=>a.label.localeCompare(b.label))) {
+          // Eintrag gilt als "eingeschlossen" wenn weder itemId noch eine seiner spellIds in excluded ist
+          const isExcluded = (e.itemId && excluded.has(e.itemId)) || (e.spellIds || []).some(id => excluded.has(id));
+          const idData = JSON.stringify({ itemId: e.itemId, spellIds: e.spellIds });
+          rows.push(`<label class="consumes-check"><input type="checkbox" ${isExcluded ? '' : 'checked'} data-consume-ids='${escapeHtml(idData)}'> <span>${escapeHtml(e.label)}</span></label>`);
+        }
+        rows.push('</div>');
+      }
+      host.innerHTML = rows.join('');
+    } catch (e) {
+      host.innerHTML = '<p class="text-error">Fehler: ' + escapeHtml(e.message) + '</p>';
+      return;
+    }
+    if (!saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const checks = host.querySelectorAll('input[type=checkbox][data-consume-ids]');
+        const excludedIds = [];
+        checks.forEach(cb => {
+          if (cb.checked) return; // included → nicht in excluded
+          let info; try { info = JSON.parse(cb.getAttribute('data-consume-ids')); } catch (_) { return; }
+          if (info.itemId) excludedIds.push(info.itemId);
+          for (const sid of (info.spellIds || [])) excludedIds.push(sid);
+        });
+        try {
+          const r = await apiFetch('/api/admin/consumes-scoring', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ excludedIds }),
+          });
+          if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'HTTP ' + r.status); }
+          window._consumesExcludedIds = excludedIds;
+          status.textContent = 'Gespeichert (' + excludedIds.length + ' IDs ausgeschlossen).';
         } catch (e) { status.textContent = '✗ ' + e.message; }
       });
     }
@@ -7693,6 +7783,8 @@
         for (const fd of (p.fightDetails || [])) {
           if (!fd || !fd.consumables) continue;
           for (const item of fd.consumables) {
+            // Free-conjured Items (Healthstones/Mana-Gems) zählen nicht zum Bezahlt-Total
+            if (isFreeConjured(item)) continue;
             const key = item.label;
             if (!totalConsItems.has(key)) totalConsItems.set(key, { cat: item.cat || 'other', count: 0 });
             totalConsItems.get(key).count += item.uses || 1;
@@ -8058,6 +8150,14 @@
       }
       window._branding = b;
     } catch (_) { /* fail silent — defaults bleiben */ }
+    // Consumes-Scoring-Setting laden (welche IDs nicht in Σ Bezahlt zählen)
+    try {
+      const cs = await apiFetch('/api/consumes-scoring');
+      if (cs.ok) {
+        const j = await cs.json();
+        if (Array.isArray(j.excludedIds)) window._consumesExcludedIds = j.excludedIds;
+      }
+    } catch (_) { /* default fallback bleibt aktiv */ }
   }
 
   // Generate girly mode particles

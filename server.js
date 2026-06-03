@@ -1959,6 +1959,31 @@ async function handleRequest(req, res) {
   }
 
   // ─── Public: Elixier-Policy lesen (für Buff-Filter im Frontend) ───
+  // ─── Public: consumes scoring (welche Consumes zählen in die Slacker-Bezahlt-Summe) ───
+  if (parsed.pathname === '/api/consumes-scoring' && req.method === 'GET') {
+    let excluded = null;
+    const raw = cache.getSetting('consumesExcludedIds');
+    if (raw) { try { excluded = JSON.parse(raw); } catch (_) {} }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ excludedIds: Array.isArray(excluded) ? excluded : null }));
+    return;
+  }
+  if (parsed.pathname === '/api/admin/consumes-scoring' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      const excluded = Array.isArray(body.excludedIds) ? body.excludedIds.filter(n => Number.isFinite(n)) : [];
+      cache.putSetting('consumesExcludedIds', JSON.stringify(excluded));
+      logAction(req, 'consumes_scoring_save', excluded.length + ' excluded');
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
   if (parsed.pathname === '/api/release-notes' && req.method === 'GET') {
     try {
       const md = fs.readFileSync(path.join(__dirname, 'RELEASE_NOTES.md'), 'utf8');
