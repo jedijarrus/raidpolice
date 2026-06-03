@@ -42,18 +42,24 @@
     },
     // Best rank per stat in TBC (Rank V = max)
     scrollBestRank: { Agility: 33077, Intellect: 33078, Protection: 33079, Spirit: 33080, Stamina: 33081, Strength: 33082 },
-    // Required scroll stats per role key (class:role)
+    // Required scroll stats per role key (Class:Spec) — synchron mit preanalyze.js BUFF_IDS.scrollRequired
     scrollRequired: {
-      'Warrior:dps':     ['Agility', 'Strength'],
-      'Rogue:dps':       ['Agility', 'Strength'],
-      'Paladin:dps':     ['Agility', 'Strength'],
-      'Druid:dps':       ['Agility', 'Strength'],
-      'Shaman:dps':      ['Agility', 'Strength'],  // Enh; Ele gets [] via spec check
-      'Hunter:dps':      ['Agility'],
-      'Warrior:tank':    ['Agility', 'Strength', 'Protection'],
-      'Paladin:tank':    ['Agility', 'Strength', 'Protection'],
-      'Druid:tank':      ['Agility', 'Strength', 'Protection'],
-      'HunterPet':       ['Agility', 'Strength'],
+      'Warrior:dps':         ['Agility', 'Strength'],
+      'Rogue:dps':           ['Agility', 'Strength'],
+      'Paladin:retribution': ['Agility', 'Strength'],
+      'Paladin:dps':         ['Agility', 'Strength'],
+      'Druid:feral':         ['Agility', 'Strength'],
+      'Druid:dps':           ['Agility', 'Strength'],
+      'Druid:balance':       [],
+      'Druid:healer':        [],
+      'Shaman:enhancement':  ['Agility', 'Strength'],
+      'Shaman:elemental':    [],
+      'Shaman:dps':          ['Agility', 'Strength'],
+      'Hunter:dps':          ['Agility'],
+      'Warrior:tank':        ['Agility', 'Strength', 'Protection'],
+      'Paladin:tank':        ['Agility', 'Strength', 'Protection'],
+      'Druid:tank':          ['Agility', 'Strength', 'Protection'],
+      'HunterPet':           ['Agility', 'Strength'],
     },
     // Weapon enhancements — oils, sharpening stones, weightstones (buff/aura spell IDs)
     weaponEnhancement: [
