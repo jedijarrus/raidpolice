@@ -263,7 +263,7 @@ const MAJOR_COOLDOWNS = {
   naturesSwiftness:  { ids:[17116],         name:"Nature's Swiftness",   role:'any',  cd:180  },
   innervate:         { ids:[29166],         name:'Innervate',            role:'heal', cd:360  },
   tranquility:       { ids:[740,8918,9862,9863,26983], name:'Tranquility', role:'heal', cd:480 },
-  rebirth:           { ids:[20484,20739,20740,20741,20742,20747,20748,26994], name:'Rebirth', role:'heal', cd:1200 },
+  rebirth:           { ids:[20484,20739,20740,20741,20742,26994], name:'Rebirth', role:'heal', cd:1200 },
   frenziedRegen:     { ids:[22842,22895,22896,26999], name:'Frenzied Regeneration', role:'tank', cd:180 },
   // Shaman
   elementalMastery:  { ids:[16166],         name:'Elemental Mastery',    role:'dps',  cd:180  },
