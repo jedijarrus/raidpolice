@@ -1587,11 +1587,13 @@
         }
       }
       const items = [...itemMap.values()].sort((a, b) => b.uses - a.uses);
-      const totalPaid = items.filter(i => !isFreeConjured(i)).reduce((s, i) => s + (i.uses || 0), 0);
-      return { ...r, items, totalPaid };
-    }).sort((a, b) => b.totalPaid - a.totalPaid);
+      const countedItems = items.filter(i => !isFreeConjured(i));
+      const excludedItems = items.filter(i => isFreeConjured(i));
+      const totalCounted = countedItems.reduce((s, i) => s + (i.uses || 0), 0);
+      return { ...r, items, countedItems, excludedItems, totalCounted };
+    }).sort((a, b) => b.totalCounted - a.totalCounted);
 
-    const primusTotal = aggregated.length ? aggregated[0].totalPaid : 0;
+    const primusTotal = aggregated.length ? aggregated[0].totalCounted : 0;
     const thresholdPct = Number.isFinite(window._consumesSlackerPct) ? window._consumesSlackerPct : DEFAULT_SLACKER_THRESHOLD_PCT;
     const slackerThreshold = Math.ceil(primusTotal * (thresholdPct / 100));
     const primusName = aggregated.length ? aggregated[0].name : '';
@@ -1610,26 +1612,33 @@
     if (primusTotal > 0) {
       html += `<div class="cons-summary-meta">Primus: <strong>${escapeHtml(primusName)}</strong> (${primusTotal}) · Schwelle: &lt; ${slackerThreshold} Items (${thresholdPct}%)</div>`;
     }
-    html += '<table class="results-table cons-summary-table"><thead><tr><th>Spieler</th><th>Klasse</th><th>Fights</th><th>Consumables</th><th>Σ Bezahlt</th></tr></thead><tbody>';
+    html += '<table class="results-table cons-summary-table"><thead><tr><th>Spieler</th><th>Klasse</th><th>Fights</th><th>Consumables</th><th>Σ Genommen</th></tr></thead><tbody>';
     let underThresholdShown = false;
     for (let ri = 0; ri < aggregated.length; ri++) {
       const r = aggregated[ri];
-      const isUnderThreshold = primusTotal > 0 && r.totalPaid < slackerThreshold;
+      const isUnderThreshold = primusTotal > 0 && r.totalCounted < slackerThreshold;
       if (isUnderThreshold && !underThresholdShown) {
         html += `<tr class="slacker-divider-row"><td colspan="5"><div class="slacker-divider"><span class="slacker-divider-line"></span><span class="slacker-divider-label">⚠ Unter ${thresholdPct}% vom Primus (&lt; ${slackerThreshold})</span><span class="slacker-divider-line"></span></div></td></tr>`;
         underThresholdShown = true;
       }
       const cn = classNameFromType(r.type);
       const css = classCssFromType(r.type);
-      // Per-Fight expand nur sinnvoll für Boss-Modus (Trash hat keine per-fight Granularität)
       const hasDetails = filter === 'boss' && r.fightDetails && r.fightDetails.some(fd => fd && fd.consumables && fd.consumables.length);
       const iconsHtml = r.items.length ? r.items.map(renderIcon).join('') : '<span class="text-muted">—</span>';
+      // Tooltip: was wird gezählt, was nicht (in title-attr — Newlines via &#10;)
+      const fmtItems = arr => arr.length ? arr.map(i => `${i.label} ×${i.uses}`).join(', ') : '—';
+      const tooltipLines = [
+        `✓ Gezählt (${r.totalCounted}): ${fmtItems(r.countedItems)}`,
+        `✗ Nicht gezählt: ${fmtItems(r.excludedItems)}`,
+      ];
+      // escapeHtml escaped Sonderzeichen, & wird zu &amp; → wir bauen das title-Attribut manuell mit safer raw
+      const tooltip = tooltipLines.join('\n');
       html += `<tr class="buff-summary-row${hasDetails ? ' expandable' : ''}${isUnderThreshold ? ' is-slacker' : ''}" data-cons-idx="${ri}">`;
       html += `<td class="${css}">${hasDetails ? '<span class="expand-arrow">&#9654;</span> ' : ''}${renderPlayerName(r.name)}</td>`;
       html += `<td class="${css}">${cn}</td>`;
       html += `<td>${r.playerFightCount}</td>`;
       html += `<td class="cons-items-cell">${iconsHtml}</td>`;
-      html += `<td><span class="raid-cons-total${isUnderThreshold ? ' raid-cons-total--low' : ''}">${r.totalPaid}</span></td>`;
+      html += `<td><span class="raid-cons-total${isUnderThreshold ? ' raid-cons-total--low' : ''}" title="${escapeHtml(tooltip)}" style="cursor:help">${r.totalCounted}</span></td>`;
       html += `</tr>`;
 
       if (hasDetails) {
