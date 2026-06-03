@@ -1126,7 +1126,7 @@
       }
 
       if (analysis.consumables) {
-        renderConsumableResults(analysis.consumables, analysis.consumablesAll);
+        renderConsumableResults(analysis.consumables, analysis.consumablesTrash);
         setStatus('#consumables-status', 'Consumable-Analyse geladen.');
       } else {
         $('#consumables-results').innerHTML = '<p class="text-muted">Consumable-Analyse noch nicht verfuegbar.</p>';
@@ -3700,7 +3700,7 @@
     }, 9000);
   }
 
-  // Items die nicht in die "Σ Bezahlt"-Summe zählen — admin-konfigurierbar via consumesExcludedIds.
+  // Items die nicht in die "Σ Genommen"-Summe zählen — admin-konfigurierbar via consumesExcludedIds.
   // Default-Ausschluss (wenn kein Setting gesetzt):
   //   Healthstones R1-R3, Mana Emerald, Mana Ruby (klassen-exklusive / verschenkte Items),
   //   Engineering-Items (Engi-Profession only),
@@ -3760,7 +3760,7 @@
         }
       }
     }
-    // Cons-Liste: bezahlte Items (ohne Mana Gems/Healthstones) zählen ins Total
+    // Cons-Liste: gezählte Items (Free-conjured ausgeschlossen) gehen ins Total
     const consPlayers = [...consByPlayer.values()].map(p => {
       const items = [...p.items.values()];
       const total = items.filter(i => !isFreeConjured(i)).reduce((s, i) => s + (i.uses || 0), 0);
@@ -4795,7 +4795,7 @@
     }
   }
 
-  // ─── Admin: Consumes Slacker-Wertung ───
+  // ─── Admin: Consumes Übersichts-Wertung ───
   async function loadConsumesScoringEditor() {
     const host = $('#consumes-scoring-editor');
     const saveBtn = $('#btn-consumes-scoring-save');
@@ -7860,7 +7860,7 @@
         for (const fd of (p.fightDetails || [])) {
           if (!fd || !fd.consumables) continue;
           for (const item of fd.consumables) {
-            // Free-conjured Items (Healthstones/Mana-Gems) zählen nicht zum Bezahlt-Total
+            // Free-conjured Items (Healthstones/Mana-Gems) zählen nicht zum Σ-Genommen-Total
             if (isFreeConjured(item)) continue;
             const key = item.label;
             if (!totalConsItems.has(key)) totalConsItems.set(key, { cat: item.cat || 'other', count: 0 });
@@ -8227,7 +8227,7 @@
       }
       window._branding = b;
     } catch (_) { /* fail silent — defaults bleiben */ }
-    // Consumes-Scoring-Setting laden (welche IDs nicht in Σ Bezahlt zählen + Threshold %)
+    // Consumes-Scoring-Setting laden (welche IDs nicht in Σ Genommen zählen + Threshold %)
     try {
       const cs = await apiFetch('/api/consumes-scoring');
       if (cs.ok) {
