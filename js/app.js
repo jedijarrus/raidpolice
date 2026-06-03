@@ -5165,8 +5165,7 @@
       const [cls, spec] = role.split(':');
       const css = classCssFromType(cls);
       html += `<div class="cd-expect-row" data-role="${escapeHtml(role)}">`;
-      const specLabel = (role === 'Druid:feral') ? 'feral-dps' : (role === 'Druid:tank') ? 'feral-tank' : spec;
-      html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(specLabel)}</span></div>`;
+      html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(spec)}</span></div>`;
       html += '<div class="cd-expect-row__cds">';
       for (const stat of ALL_STATS) {
         const checked = eff.has(stat);
@@ -5248,8 +5247,7 @@
       const [cls, spec] = role.split(':');
       const css = classCssFromType(cls);
       html += `<div class="cd-expect-row" data-role="${escapeHtml(role)}">`;
-      const specLabel = (role === 'Druid:feral') ? 'feral-dps' : (role === 'Druid:tank') ? 'feral-tank' : spec;
-      html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(specLabel)}</span></div>`;
+      html += `<div class="cd-expect-row__head"><strong class="${css}">${escapeHtml(cls)}</strong> <span class="text-muted">·</span> <span>${escapeHtml(spec)}</span></div>`;
       html += '<div class="cd-expect-row__cds">';
       // Nur CDs der eigenen Klasse — Racials raus
       const sortedKeys = allCdKeys
