@@ -584,11 +584,8 @@
       if (location.hash !== '#admin' && !location.hash.startsWith('#player/')) switchView('view-dashboard');
       hideLoading();
 
-      // If live ticker already detected a raid, switch to Live tab
-      if (liveAutoSwitched) {
-        const liveBtn = $('[data-dtab="dtab-live"]');
-        if (liveBtn) liveBtn.click();
-      }
+      // Kein Auto-Switch mehr auf den Live-Tab — Live-Dot in der Nav reicht als Indikator,
+      // damit F5 immer die Seite zeigt auf der man gerade war.
 
       // Activate hash tab now that guild data is loaded
       if (_pendingHashTab && $(`#dtab-${_pendingHashTab}`)) {
@@ -3525,7 +3522,6 @@
   // ─── LIVE TICKER (server-side analysis, frontend is pure view) ───
 
   let liveTimerId = null;
-  let liveAutoSwitched = false;
   let liveLastData = null;
   let liveLastFightCount = 0;
 
@@ -3553,19 +3549,10 @@
         else dot.classList.add('hidden');
       }
 
-      // Auto-switch to Live tab on first live raid detection
-      if (data.raidActive && !liveAutoSwitched) {
-        liveAutoSwitched = true;
-        const liveBtn = $('[data-dtab="dtab-live"]');
-        if (liveBtn) liveBtn.click();
-      }
-
+      // Kein Auto-Switch + kein Auto-Dashboard-Refresh mehr — User soll auf der Seite
+      // bleiben auf der er gerade ist. Live-Dot in der Nav signalisiert dass ein Raid
+      // läuft, der Live-Tab aktualisiert sich nur wenn der User dort hin navigiert.
       renderLiveView(data);
-
-      // Detect new fights → refresh dashboard
-      if (data.fights && data.fights.length > liveLastFightCount && liveLastFightCount > 0) {
-        renderDashboard(savedGuildName, savedServerName, savedRegion).catch(() => {});
-      }
       liveLastFightCount = data.fights ? data.fights.length : 0;
 
     } catch (e) {
