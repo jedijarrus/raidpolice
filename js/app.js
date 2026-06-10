@@ -8251,10 +8251,27 @@
     // ── Render: Statistik nach Gruppen organisiert ──
     const groups = { shame: [], performance: [], survival: [], consumes: [], bosses: [] };
 
-    // 🏆 Hall of Shame — manuelle Wasted-Loot-Einträge
-    groups.shame.push(statsTable('Ashes of Al’ar wasted', ['#', 'Spieler', 'Counter'], [
-      `<td class="stats-medal-1">1</td><td>${renderPlayerName('Casinotesse')}</td><td><strong>1</strong></td>`,
-    ]));
+    // 🏆 Hall of Shame — Ashes of Al'ar Empfänger live aus TMB-Loot.
+    // Spielernamen-Aliase kommen aus der instanz-spezifischen Branding-Config
+    // (phoenixAliases-Setting, nicht im public Repo enthalten).
+    const phxAliases = (window._branding && window._branding.phoenixAliases) || {};
+    const phxLoot = ((window._tmbLoot && window._tmbLoot.loot) || []).filter(l => l.itemId === 32458);
+    const phxCount = new Map();
+    for (const l of phxLoot) phxCount.set(l.character, (phxCount.get(l.character) || 0) + 1);
+    const phxSorted = [...phxCount.entries()].sort((a, b) => b[1] - a[1]);
+    if (phxSorted.length) {
+      function phxName(realName) {
+        const alias = phxAliases[realName];
+        if (!alias) return renderPlayerName(realName);
+        return `<a href="#player/${encodeURIComponent(realName)}" class="player-link">${escapeHtml(alias)}</a>`;
+      }
+      groups.shame.push(statsTable('Ashes of Al’ar wasted', ['#', 'Spieler', 'Counter'],
+        phxSorted.map(([name, count], i) => {
+          const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
+          return `<td${medal}>${i + 1}</td><td>${phxName(name)}</td><td><strong>${count}</strong></td>`;
+        })
+      ));
+    }
 
     // 🧪 Consumes-Übersicht (gesamtes Pool aller Reports, Slacker-Filter aktiv)
     const totalUses = [...totalFlasks.values(), ...totalBattle.values(), ...totalGuardian.values(), ...totalFood.values()].reduce((s,n)=>s+n, 0)

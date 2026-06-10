@@ -351,9 +351,10 @@ function parseTmbLootCsv(csv) {
     if (!cols[idx.character_name] || !cols[idx.item_name]) continue;
     const importId = (cols[idx.import_id] || '').trim();
     const receivedAt = cols[idx.received_at] || '';
-    // Skip manual entries (no import_id) unless from 2026-03-09 (Pofax batch nachtrag)
-    if (!importId && !receivedAt.startsWith('2026-03-09')) continue;
+    // Manuelle Awards (officer-klick in TMB statt Gargul-Auto-Import) zählen mit.
+    // Früher wurden sie ausgefiltert, hat aber legitime Offspec-Drops verschluckt.
     loot.push({
+      manual: !importId,
       character: cols[idx.character_name],
       class: cols[idx.character_class],
       item: cols[idx.item_name],
@@ -440,8 +441,10 @@ async function handleRequest(req, res) {
     try { raidSchedule = JSON.parse(cache.getSetting('raidSchedule') || '[]'); } catch (_) {}
     let ediktTexts = {};
     try { ediktTexts = JSON.parse(cache.getSetting('ediktTexts') || '{}'); } catch (_) {}
+    let phoenixAliases = {};
+    try { phoenixAliases = JSON.parse(cache.getSetting('phoenixAliases') || '{}'); } catch (_) {}
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-    res.end(JSON.stringify({ appName, guildName, serverName, region, faction, easterEggs, raidSchedule, ediktTexts }));
+    res.end(JSON.stringify({ appName, guildName, serverName, region, faction, easterEggs, raidSchedule, ediktTexts, phoenixAliases }));
     return;
   }
 
