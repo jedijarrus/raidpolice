@@ -4796,6 +4796,56 @@
     }
   }
 
+  function openRedateModal(origDate, raidName, currentDate, onConfirm) {
+    const body = `
+      <div class="redate-modal">
+        <p class="text-muted" style="margin:0 0 12px;font-size:0.82rem">Aktuelles Datum: <code>${escapeHtml(currentDate)}</code></p>
+        <div class="redate-modal__raid">
+          <span class="redate-modal__raid-name">${escapeHtml(raidName)}</span>
+        </div>
+        <label class="redate-modal__label" for="redate-input">Neues Datum</label>
+        <input type="date" id="redate-input" class="penalty-input" value="${escapeHtml(currentDate)}" max="9999-12-31">
+        <p class="redate-modal__error hidden" id="redate-modal-error"></p>
+      </div>
+    `;
+    showModal('Raid umdatieren', body, [
+      { label: 'Abbrechen' },
+      { label: 'Übernehmen', primary: true, action: () => {
+          // synchron Validation in click-handler: showModal schließt automatisch, daher pre-collect
+        } },
+    ]);
+    // Reassign primary button behavior to validate vor dem submit
+    const overlay = $('#cla-modal-overlay');
+    const primary = $('#cla-modal-actions .btn-primary');
+    if (primary) {
+      // showModal hat den schließenden Handler bereits angebunden — wir bauen ihn nach
+      const newPrimary = primary.cloneNode(true);
+      primary.parentNode.replaceChild(newPrimary, primary);
+      newPrimary.addEventListener('click', () => {
+        const input = $('#redate-input');
+        const err = $('#redate-modal-error');
+        const val = (input && input.value || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+          if (err) { err.textContent = 'Bitte ein gültiges Datum wählen.'; err.classList.remove('hidden'); }
+          return;
+        }
+        overlay.classList.add('hidden');
+        onConfirm(val);
+      });
+    }
+    const inp = $('#redate-input');
+    if (inp) {
+      setTimeout(() => { inp.focus(); inp.select && inp.select(); }, 50);
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const p = $('#cla-modal-actions .btn-primary');
+          if (p) p.click();
+        }
+      });
+    }
+  }
+
   // ─── Admin: Anti-Inkompetenz (TMB-Raid-Datum-Overrides) ───
   async function loadAntiInkompetenz() {
     const ovrBody = $('#anti-overrides-body');
@@ -4856,19 +4906,18 @@
           </tr>`;
         }).join('');
         raidsBody.querySelectorAll('[data-rename-orig]').forEach(btn => {
-          btn.addEventListener('click', async () => {
+          btn.addEventListener('click', () => {
             const origDate = btn.getAttribute('data-rename-orig');
             const raidName = btn.getAttribute('data-rename-name');
             const cur = ovrLookup.get(origDate + '|' + raidName) || origDate;
-            const newDate = prompt(`Neues Datum für "${raidName}" (aktuell ${cur}) — Format YYYY-MM-DD:`, cur);
-            if (!newDate) return;
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('Datum muss YYYY-MM-DD sein.'); return; }
-            try {
-              const r = await apiFetch('/api/admin/tmb-raid-overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origDate, raidName, newDate }) });
-              if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Fehler'); }
-              status.textContent = `Umdatiert: ${origDate} → ${newDate}.`;
-              refresh();
-            } catch (e) { status.textContent = '✗ ' + e.message; }
+            openRedateModal(origDate, raidName, cur, async (newDate) => {
+              try {
+                const r = await apiFetch('/api/admin/tmb-raid-overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origDate, raidName, newDate }) });
+                if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Fehler'); }
+                status.textContent = `Umdatiert: ${origDate} → ${newDate}.`;
+                refresh();
+              } catch (e) { status.textContent = '✗ ' + e.message; }
+            });
           });
         });
       } catch (e) {

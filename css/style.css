@@ -2567,6 +2567,41 @@ body.girly-mode .butterfly { opacity: 0.9; }
 .release-notes strong { color: var(--text); font-weight: 600; }
 .release-notes hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
 
+.redate-modal { display: flex; flex-direction: column; }
+.redate-modal__raid {
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: var(--radius-sm);
+}
+.redate-modal__raid-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.redate-modal__label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+.redate-modal #redate-input {
+  width: 100%;
+  margin-top: 0;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+  color-scheme: dark;
+}
+.redate-modal__error {
+  color: var(--error);
+  font-size: 0.8rem;
+  margin: 8px 0 0;
+}
+
 .cd-not-expected {
   display: inline-block;
   margin-left: 6px;
