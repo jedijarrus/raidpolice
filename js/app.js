@@ -8256,19 +8256,28 @@
     // (phoenixAliases-Setting, nicht im public Repo enthalten).
     const phxAliases = (window._branding && window._branding.phoenixAliases) || {};
     const phxLoot = ((window._tmbLoot && window._tmbLoot.loot) || []).filter(l => l.itemId === 32458);
-    const phxCount = new Map();
-    for (const l of phxLoot) phxCount.set(l.character, (phxCount.get(l.character) || 0) + 1);
-    const phxSorted = [...phxCount.entries()].sort((a, b) => b[1] - a[1]);
+    const phxAgg = new Map();
+    for (const l of phxLoot) {
+      const ex = phxAgg.get(l.character) || { count: 0, cls: l.class || '' };
+      ex.count++;
+      if (l.class) ex.cls = l.class;
+      phxAgg.set(l.character, ex);
+    }
+    const phxSorted = [...phxAgg.entries()].sort((a, b) => b[1].count - a[1].count);
     if (phxSorted.length) {
-      function phxName(realName) {
+      function phxName(realName, cls) {
+        const css = classCssFromType(cls);
         const alias = phxAliases[realName];
-        if (!alias) return renderPlayerName(realName);
-        return `<a href="#player/${encodeURIComponent(realName)}" class="player-link">${escapeHtml(alias)}</a>`;
+        if (!alias) {
+          // renderPlayerName liefert <a class="player-link">… — Klassen-Farbe ums Element packen
+          return `<span class="${css}">${renderPlayerName(realName)}</span>`;
+        }
+        return `<a href="#player/${encodeURIComponent(realName)}" class="player-link ${css}">${escapeHtml(alias)}</a>`;
       }
       groups.shame.push(statsTable('Ashes of Al’ar wasted', ['#', 'Spieler', 'Counter'],
-        phxSorted.map(([name, count], i) => {
+        phxSorted.map(([name, info], i) => {
           const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
-          return `<td${medal}>${i + 1}</td><td>${phxName(name)}</td><td><strong>${count}</strong></td>`;
+          return `<td${medal}>${i + 1}</td><td>${phxName(name, info.cls)}</td><td><strong>${info.count}</strong></td>`;
         })
       ));
     }
