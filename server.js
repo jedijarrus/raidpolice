@@ -1784,29 +1784,91 @@ async function handleRequest(req, res) {
     const cacheKey = 'tmb_attendance';
     const forceRefresh = parsed.query && parsed.query.includes('refresh=1');
     const cached = cache.getCached(cacheKey);
+    let attendance;
     if (!forceRefresh && cached && (Date.now() - cached.fetched_at < TMB_CACHE_TTL)) {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'X-Cache': 'HIT', ...SECURITY_HEADERS });
-      res.end(cached.response_json);
-      return;
-    }
-
-    try {
-      const tmbUrls = getTmbUrls();
-      if (!tmbUrls.configured) {
-        res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-        res.end(JSON.stringify({ error: 'TMB guild not configured' }));
+      attendance = JSON.parse(cached.response_json);
+    } else {
+      try {
+        const tmbUrls = getTmbUrls();
+        if (!tmbUrls.configured) {
+          res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: 'TMB guild not configured' }));
+          return;
+        }
+        const csvData = await tmbFetch(tmbUrls.attendance, tmbCookie);
+        attendance = parseTmbCsv(csvData);
+        cache.putCache(cacheKey, JSON.stringify(attendance));
+      } catch (err) {
+        console.error('[TMB]', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'TMB fetch failed' }));
         return;
       }
-      const csvData = await tmbFetch(tmbUrls.attendance, tmbCookie);
-      const attendance = parseTmbCsv(csvData);
-      const json = JSON.stringify(attendance);
-      cache.putCache(cacheKey, json);
-      res.writeHead(200, { 'Content-Type': 'application/json', 'X-Cache': 'MISS', ...SECURITY_HEADERS });
-      res.end(json);
-    } catch (err) {
-      console.error('[TMB]', err.message);
+    }
+    // Date-Overrides on-the-fly anwenden — Admin korrigiert fehl-datierte TMB-Raids
+    try {
+      const overrides = cache.getTmbRaidOverrides();
+      if (overrides.length) {
+        const lookup = new Map(overrides.map(o => [o.orig_date + '|' + o.raid_name, o.new_date]));
+        for (const r of (attendance.raids || [])) {
+          const key = r.date + '|' + r.name;
+          if (lookup.has(key)) r.date = lookup.get(key);
+        }
+      }
+    } catch (_) {}
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify(attendance));
+    return;
+  }
+
+  // ─── Admin: TMB-Raid-Datum-Overrides ───
+  if (parsed.pathname === '/api/admin/tmb-raid-overrides' && req.method === 'GET') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ overrides: cache.getTmbRaidOverrides() }));
+    return;
+  }
+  if (parsed.pathname === '/api/admin/tmb-raid-overrides' && req.method === 'POST') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      const origDate = String(body.origDate || '').trim();
+      const raidName = String(body.raidName || '').trim();
+      const newDate = String(body.newDate || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(origDate) || !raidName || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'origDate / raidName / newDate ungültig (newDate: YYYY-MM-DD)' }));
+        return;
+      }
+      const session = getSession(req);
+      cache.setTmbRaidOverride(origDate, raidName, newDate, session ? session.username : null);
+      logAction(req, 'tmb_override_set', `${origDate} "${raidName}" → ${newDate}`);
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-      res.end(JSON.stringify({ error: 'TMB fetch failed' }));
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (parsed.pathname === '/api/admin/tmb-raid-overrides' && req.method === 'DELETE') {
+    if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }
+    try {
+      const body = JSON.parse(await readBody(req) || '{}');
+      const origDate = String(body.origDate || '').trim();
+      const raidName = String(body.raidName || '').trim();
+      if (!origDate || !raidName) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: 'origDate + raidName erforderlich' }));
+        return;
+      }
+      cache.removeTmbRaidOverride(origDate, raidName);
+      logAction(req, 'tmb_override_remove', `${origDate} "${raidName}"`);
+      res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
     }
     return;
   }

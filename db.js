@@ -154,6 +154,14 @@ function initSchema() {
       set_by TEXT,
       set_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS tmb_raid_overrides (
+      orig_date TEXT NOT NULL,
+      raid_name TEXT NOT NULL,
+      new_date TEXT NOT NULL,
+      set_by TEXT,
+      set_at INTEGER NOT NULL,
+      PRIMARY KEY (orig_date, raid_name)
+    );
     CREATE TABLE IF NOT EXISTS manual_reports (
       report_code TEXT PRIMARY KEY,
       title TEXT,
@@ -531,6 +539,21 @@ function clearReportTrack(reportCode) {
   d.prepare('DELETE FROM report_tracks WHERE report_code = ?').run(reportCode);
 }
 
+// ─── TMB Raid Date Overrides ───
+function getTmbRaidOverrides() {
+  const d = getDb();
+  return d.prepare('SELECT orig_date, raid_name, new_date, set_by, set_at FROM tmb_raid_overrides').all();
+}
+function setTmbRaidOverride(origDate, raidName, newDate, setBy) {
+  const d = getDb();
+  d.prepare('INSERT OR REPLACE INTO tmb_raid_overrides (orig_date, raid_name, new_date, set_by, set_at) VALUES (?, ?, ?, ?, ?)')
+    .run(origDate, raidName, newDate, setBy || null, Date.now());
+}
+function removeTmbRaidOverride(origDate, raidName) {
+  const d = getDb();
+  d.prepare('DELETE FROM tmb_raid_overrides WHERE orig_date = ? AND raid_name = ?').run(origDate, raidName);
+}
+
 // ─── Manual reports (admin-added codes for non-guild logs) ───
 function getManualReports() {
   const d = getDb();
@@ -576,4 +599,5 @@ module.exports = {
   getComputedView, putComputedView, invalidateComputedView,
   getReportTrackOverride, getAllReportTracks, setReportTrack, clearReportTrack,
   getManualReports, getManualReport, addManualReport, removeManualReport,
+  getTmbRaidOverrides, setTmbRaidOverride, removeTmbRaidOverride,
 };

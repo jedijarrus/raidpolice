@@ -4512,7 +4512,7 @@
   function loadAllAdmin() {
     loadAdminReports(); loadAdminPenalties(); loadAdminRevoked(); loadAdminExcused(); loadAdminExcusedPlayers(); loadAdminExcludedPlayers(); loadAdminPlayerRoles(); loadAdminJoinDates(); loadAdminChangelog(); loadSysinfo(); loadRaidDateDropdowns();
     loadDataStatus(); loadPipelineStatus(); loadElixirPolicyEditor(); loadTrackingConfig();
-    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl(); loadManualReports(); loadConsumesScoringEditor();
+    loadGeneralSettings(); loadRaidScheduleEditor(); loadEasterEggsEditor(); loadEdiktTextsEditor(); loadSimControl(); loadManualReports(); loadConsumesScoringEditor(); loadAntiInkompetenz();
     if (adminRole === 'superadmin') loadAdminUsers();
   }
 
@@ -4794,6 +4794,88 @@
         } catch (e) { status.textContent = '✗ ' + e.message; }
       });
     }
+  }
+
+  // ─── Admin: Anti-Inkompetenz (TMB-Raid-Datum-Overrides) ───
+  async function loadAntiInkompetenz() {
+    const ovrBody = $('#anti-overrides-body');
+    const raidsBody = $('#anti-raids-body');
+    const status = $('#anti-overrides-status');
+    if (!ovrBody || !raidsBody) return;
+    async function refresh() {
+      // Overrides + TMB-Raid-Liste laden
+      try {
+        const [ovrR, tmbR] = await Promise.all([
+          apiFetch('/api/admin/tmb-raid-overrides'),
+          apiFetch('/api/tmb/attendance'),
+        ]);
+        if (!ovrR.ok) { ovrBody.innerHTML = '<tr><td colspan="5" class="text-muted">Override-Liste nicht ladbar.</td></tr>'; return; }
+        const { overrides } = await ovrR.json();
+        if (!overrides.length) {
+          ovrBody.innerHTML = '<tr><td colspan="5" class="text-muted">Keine Overrides definiert.</td></tr>';
+        } else {
+          ovrBody.innerHTML = overrides.map(o => {
+            const setBy = new Date(o.set_at).toLocaleString('de-DE');
+            return `<tr>
+              <td><code>${escapeHtml(o.orig_date)}</code></td>
+              <td>${escapeHtml(o.raid_name)}</td>
+              <td><code>${escapeHtml(o.new_date)}</code></td>
+              <td>${escapeHtml(o.set_by || '—')} <small class="text-muted">${escapeHtml(setBy)}</small></td>
+              <td><button class="penalty-btn penalty-btn--remove" data-ovr-orig="${escapeHtml(o.orig_date)}" data-ovr-name="${escapeHtml(o.raid_name)}">Override entfernen</button></td>
+            </tr>`;
+          }).join('');
+          ovrBody.querySelectorAll('[data-ovr-orig]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const origDate = btn.getAttribute('data-ovr-orig');
+              const raidName = btn.getAttribute('data-ovr-name');
+              if (!confirm(`Override für "${raidName}" (${origDate}) wirklich entfernen?`)) return;
+              try {
+                const r = await apiFetch('/api/admin/tmb-raid-overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origDate, raidName }) });
+                if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Fehler'); }
+                status.textContent = 'Override entfernt.';
+                refresh();
+              } catch (e) { status.textContent = '✗ ' + e.message; }
+            });
+          });
+        }
+        // Raid-Liste
+        if (!tmbR.ok) { raidsBody.innerHTML = '<tr><td colspan="4" class="text-muted">TMB-Daten nicht ladbar.</td></tr>'; return; }
+        const att = await tmbR.json();
+        const raids = (att.raids || []).slice();
+        // Override-Lookup: Original-Datum → ggf. zeigen wir das schon korrigierte Datum
+        const ovrLookup = new Map(overrides.map(o => [o.orig_date + '|' + o.raid_name, o.new_date]));
+        raids.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        raidsBody.innerHTML = raids.slice(0, 100).map(r => {
+          const isOverridden = ovrLookup.has(r.date + '|' + r.name);
+          const charCount = (r.characters || []).length;
+          return `<tr${isOverridden ? ' style="opacity:0.6"' : ''}>
+            <td><code>${escapeHtml(r.date)}</code>${isOverridden ? ' <small class="text-muted">(bereits umdatiert)</small>' : ''}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td>${charCount}</td>
+            <td><button class="penalty-btn" data-rename-orig="${escapeHtml(r.date)}" data-rename-name="${escapeHtml(r.name)}">Umdatieren</button></td>
+          </tr>`;
+        }).join('');
+        raidsBody.querySelectorAll('[data-rename-orig]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const origDate = btn.getAttribute('data-rename-orig');
+            const raidName = btn.getAttribute('data-rename-name');
+            const cur = ovrLookup.get(origDate + '|' + raidName) || origDate;
+            const newDate = prompt(`Neues Datum für "${raidName}" (aktuell ${cur}) — Format YYYY-MM-DD:`, cur);
+            if (!newDate) return;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('Datum muss YYYY-MM-DD sein.'); return; }
+            try {
+              const r = await apiFetch('/api/admin/tmb-raid-overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origDate, raidName, newDate }) });
+              if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Fehler'); }
+              status.textContent = `Umdatiert: ${origDate} → ${newDate}.`;
+              refresh();
+            } catch (e) { status.textContent = '✗ ' + e.message; }
+          });
+        });
+      } catch (e) {
+        ovrBody.innerHTML = `<tr><td colspan="5" class="text-muted">Fehler: ${escapeHtml(e.message)}</td></tr>`;
+      }
+    }
+    refresh();
   }
 
   // ─── Admin: Consumes Übersichts-Wertung ───
