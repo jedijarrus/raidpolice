@@ -1,5 +1,40 @@
 # Release Notes
 
+## 2026-06-10
+
+### Admin: „Anti-Inkompetenz"-Tab — TMB-Raid-Datum-Overrides
+Wenn ein Raid in ThatsMyBis mit dem falschen Datum eingetragen wurde, gab's bisher keinen Hebel, das von außen zu korrigieren. Neuer Admin-Tab erlaubt es, pro Raid-Eintrag ein neues Datum festzulegen.
+- Persistiert in `tmb_raid_overrides` (orig_date + raid_name → new_date)
+- Beim Lesen der Attendance-Daten wird der Override on-the-fly angewendet — TMB-Cache bleibt valide, kein Re-Fetch nötig
+- Umdatieren-Modal mit nativen HTML5-Date-Picker (Dark-Theme), Inline-Validierung
+- Bestehende Overrides jederzeit entfernbar
+
+## 2026-06-08
+
+### Schluss mit Auto-Switches — F5 landet wieder dort wo du warst
+Zwei UX-Stolpersteine sind raus:
+- Der Live-Ticker hat dich beim ersten erkannten Raid (und bei jedem späteren Poll) auf den Live-Tab gezerrt. Stört, wenn man gerade einen Report oder Spieler-Detail anschaut. Der **Live-Dot** in der Tab-Nav bleibt als Indikator — auf den Tab klickst du jetzt selbst.
+- Bei jedem neuen Fight im Live-Ticker wurde das Dashboard komplett neu gerendert — Scroll-Position weg.
+F5 / Page-Reload landet jetzt zuverlässig auf der Seite auf der du warst — hash-basiertes Routing war schon da, die Auto-Switches haben es überschrieben.
+
+## 2026-06-03
+
+### Scroll- und CD-Erwartungen komplett im Admin-Bereich editierbar
+**Tracking-Tab erweitert** — bisher hartcodierte Listen sind jetzt frei konfigurierbar:
+- **CD-Erwartungen pro Class:Spec** — Chip-Liste pro Rolle mit allen Cooldowns der eigenen Klasse (Racials raus, nur klassenrelevante Spells). Default: Druid:feral ohne Frenzied Regeneration (Bear-Ability).
+- **Scroll-Anforderungen pro Class:Spec** — Pro Rolle abkreuzen welche Stat-Scrolls Pflicht sind (Agility, Strength, Intellect, Protection, Spirit, Stamina).
+- Setting persistiert als `cdRoleExpectations` / `scrollRequirements`. „Auf Defaults zurücksetzen" wipet das Override.
+
+### Rebirth-Cooldown-Fix
+Die Druid-Rebirth-Spell-ID-Liste hatte zwei Fremdkörper drin (Dominate Mind, Shadow Bolt Volley — beides Boss-Spells). Die Cooldown-Analyse hat dadurch Boss-Casts fälschlich als Rebirth gezählt. Auf die 6 echten Rebirth-Ränge (Level 20/30/40/50/60/70) eingedampft.
+
+### Scrolls-Spalte zeigt jetzt „Required-Present / Required-Expected"
+Bisher wurden ALLE Scrolls als „Have" gezählt — auch Bonus-Stat-Scrolls die ein Spieler zusätzlich genommen hat. Resultat: Ein Hybrid-Druide mit 1 fehlenden Pflicht-Scroll und ein paar Bonus-Scrolls bekam grünes 27/26 statt eines Hinweises auf das echte Loch. Jetzt zählt nur das was tatsächlich von den Required-Stats abgedeckt wurde → Lücken werden sichtbar.
+
+### Editor-UX: Class:dps-Legacy-Keys raus, Klassen-Filter bei CDs
+- Paladin/Druid/Shaman hatten neben den konkreten Specs (retribution / feral / enhancement) noch je einen Legacy-`Class:dps`-Eintrag — der wird vom Role-Detection nie zurückgegeben und ist jetzt aus den Editoren raus.
+- Der CD-Editor zeigt pro Class:Spec **nur die CDs der eigenen Klasse** — keine Bestial-Wrath-Chip mehr beim Priest:healer.
+
 ## 2026-06-03
 
 ### Consumables-Tab: Filter Boss/Trash/Beides

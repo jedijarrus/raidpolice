@@ -2142,8 +2142,10 @@ async function handleRequest(req, res) {
   if (parsed.pathname === '/api/release-notes' && req.method === 'GET') {
     try {
       const md = fs.readFileSync(path.join(__dirname, 'RELEASE_NOTES.md'), 'utf8');
+      let priv = '';
+      try { priv = fs.readFileSync(path.join(__dirname, 'RELEASE_NOTES-private.md'), 'utf8') + '\n\n---\n\n'; } catch (_) {}
       res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', ...SECURITY_HEADERS });
-      res.end(md);
+      res.end(priv + md);
     } catch (e) {
       res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
       res.end(JSON.stringify({ error: 'Release notes not found' }));

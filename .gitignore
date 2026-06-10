@@ -71,6 +71,7 @@ temp/
 
 # ── Project-spezifisch ──
 DOCUMENTATION-private.md
+RELEASE_NOTES-private.md
 *-snapshot.md
 robots.txt
 flowtando_snapshot.md
