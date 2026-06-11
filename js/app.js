@@ -676,62 +676,6 @@
       </div>`;
   }
 
-  // ─── Boss-Progress: Wipes-bis-Kill + Pull-Dauer über Wochen ───
-  function renderBossProgress(tbcReports) {
-    const el = $('#boss-progress');
-    if (!el) return;
-    // je Boss: chronologische Pulls mit Woche
-    const byBoss = new Map();
-    for (const r of tbcReports) {
-      for (const f of (r.fights || [])) {
-        if (!f.boss || f.boss <= 0) continue;
-        if ((f.size || 0) < 25) continue;
-        if (!byBoss.has(f.name)) byBoss.set(f.name, []);
-        byBoss.get(f.name).push({ ts: (r.start || 0) + (f.start_time || 0), kill: !!f.kill, durMs: (f.end_time || 0) - (f.start_time || 0) });
-      }
-    }
-    // Progress-Bosse: in den letzten 28 Tagen gewiped
-    const now = Date.now();
-    const cards = [];
-    for (const [name, pulls] of byBoss) {
-      pulls.sort((a, b) => a.ts - b.ts);
-      const recent = pulls.filter(p => now - p.ts < 28 * 86400000);
-      const recentWipes = recent.filter(p => !p.kill).length;
-      if (recentWipes < 3) continue; // kein aktiver Progress
-      // Wochen-Buckets
-      const weeks = new Map();
-      for (const p of pulls.slice(-60)) {
-        const d = new Date(p.ts);
-        d.setHours(0,0,0,0); d.setDate(d.getDate() - (d.getDay() + 6) % 7);
-        const k = d.getTime();
-        if (!weeks.has(k)) weeks.set(k, { wipes: 0, kills: 0, bestDur: 0 });
-        const w = weeks.get(k);
-        if (p.kill) w.kills++; else { w.wipes++; w.bestDur = Math.max(w.bestDur, p.durMs); }
-      }
-      const weekList = [...weeks.entries()].sort((a, b) => a[0] - b[0]).slice(-6);
-      const bars = weekList.map(([k, w]) => {
-        const label = new Date(k).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-        const best = w.bestDur > 0 ? `${Math.floor(w.bestDur / 60000)}:${String(Math.floor((w.bestDur % 60000) / 1000)).padStart(2, '0')}` : '';
-        return `<div class="bp-week ${w.kills ? 'killed' : ''}">
-          <div class="bp-count">${w.kills ? '✔' : w.wipes}</div>
-          <div class="bp-best">${w.kills ? 'Kill' : best}</div>
-          <div class="bp-date">${label}</div>
-        </div>`;
-      }).join('');
-      const totalWipes = pulls.filter(p => !p.kill).length;
-      const killed = pulls.some(p => p.kill);
-      cards.push(`
-        <div class="bp-card">
-          <div class="bp-head">${escapeHtml(name)} <span class="bp-total">${totalWipes} Wipes gesamt${killed ? ' · liegt' : ''}</span></div>
-          <div class="bp-weeks">${bars}</div>
-          <div class="bp-legend">Zahl = Wipes der Woche · Zeit = längster Pull</div>
-        </div>`);
-    }
-    el.innerHTML = cards.length
-      ? `<div class="bp-section"><h3 class="bp-title">Boss-Progress</h3><div class="bp-grid">${cards.join('')}</div></div>`
-      : '';
-  }
-
   async function renderDashboard(guildName, serverName, region, forceRefresh) {
     $('#guild-title').textContent = guildName;
     $('#guild-subtitle').textContent = `${serverName} (${region}) — ${guildReports.length} Reports`;
@@ -746,7 +690,6 @@
     });
     $('#guild-subtitle').textContent = `${serverName} (${region}) — ${tbcReports.length} TBC Reports`;
     renderRaidHero(tbcReports);
-    renderBossProgress(tbcReports);
 
     // Schedule-Einträge → ein Bucket pro Eintrag
     const cardEntries = schedule.length ? schedule.slice() : [
