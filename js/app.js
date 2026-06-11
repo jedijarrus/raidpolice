@@ -3516,11 +3516,20 @@
     // Player rows
     let lastClass = '';
     let mergeGroupId = 0;
+    // TMB-Abgleich: Chars ohne TMB-Account ausgrauen (nur wenn TMB-Daten existieren)
+    const _tmbNorm = s => (s || '').normalize('NFC').toLowerCase();
+    const _tmbKnown = new Set();
+    for (const set of (tmbCharsByDayKey || new Map()).values()) for (const n of set) _tmbKnown.add(_tmbNorm(n));
+    for (const set of (tmbBenchedByDayKey || new Map()).values()) for (const n of set) _tmbKnown.add(_tmbNorm(n));
+    for (const n of (lootByPlayer || new Map()).keys()) _tmbKnown.add(_tmbNorm(n));
+    const _hasTmb = name => _tmbKnown.size === 0 || _tmbKnown.has(_tmbNorm(name));
+
     for (const p of players) {
       if (p.className !== lastClass) {
         lastClass = p.className;
         html += `<tr class="class-separator"><td colspan="${5 + totalCols}"><span class="${classCssFromType(p.type)}">${p.className}</span></td></tr>`;
       }
+      const _noTmbRow = !_hasTmb(p.name) && (!p._allChars || !p._allChars.some(c => _hasTmb(c.name)));
 
       const css = classCssFromType(p.type);
 
@@ -3530,7 +3539,7 @@
         const altNames = p._alts.map(a => a.name).join(', ');
         const pLoot = p._mergedLoot || [];
         const checkNames = p._allChars.map(c => c.name);
-        html += `<tr class="merge-parent" data-merge-group="${gid}">`;
+        html += `<tr class="merge-parent${_noTmbRow ? ' no-tmb' : ''}" data-merge-group="${gid}"${_noTmbRow ? ' title="Kein TMB-Account"' : ''}>`;
         html += `<td class="col-player ${css}"><span class="merge-toggle" title="Alts: ${altNames}">&#9654;</span> ${renderPlayerName(p.name)} <small class="merge-alt-count">(+${p._alts.length})</small><span class="role-badge role-${(p.mainRole || 'DD').toLowerCase()}">${p.mainRole || 'DD'}</span></td>`;
         html += renderSummaryCols(p, pLoot);
         html += renderRaidCols(p, checkNames);
@@ -3540,8 +3549,8 @@
         for (const alt of p._alts) {
           const altCss = classCssFromType(alt.type);
           const altLoot = lootByPlayer.get(alt.name) || [];
-          html += `<tr class="merge-child hidden" data-merge-group="${gid}">`;
-          html += `<td class="col-player ${altCss} merge-indent">${renderPlayerName(alt.name)}</td>`;
+          html += `<tr class="merge-child hidden${_hasTmb(alt.name) ? '' : ' no-tmb'}" data-merge-group="${gid}">`;
+          html += `<td class="col-player ${altCss} merge-indent">${renderPlayerName(alt.name)}${_hasTmb(alt.name) ? '' : ' <small class="no-tmb-tag" title="Kein TMB-Account">kein TMB</small>'}</td>`;
           html += renderSummaryCols(alt, altLoot);
           html += renderRaidCols(alt, [alt.name]);
           html += '</tr>';
@@ -3556,8 +3565,8 @@
       } else {
         // Regular (non-merged) row
         const pLoot = lootByPlayer.get(p.name) || [];
-        html += '<tr>';
-        html += `<td class="col-player ${css}">${renderPlayerName(p.name)}<span class="role-badge role-${(p.mainRole || 'DD').toLowerCase()}">${p.mainRole || 'DD'}</span></td>`;
+        html += `<tr${_noTmbRow ? ' class="no-tmb" title="Kein TMB-Account"' : ''}>`;
+        html += `<td class="col-player ${css}">${renderPlayerName(p.name)}${_noTmbRow ? ' <small class="no-tmb-tag">kein TMB</small>' : ''}<span class="role-badge role-${(p.mainRole || 'DD').toLowerCase()}">${p.mainRole || 'DD'}</span></td>`;
         html += renderSummaryCols(p, pLoot);
         html += renderRaidCols(p, [p.name]);
         html += '</tr>';

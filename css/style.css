@@ -4849,3 +4849,14 @@ body.girly-mode .butterfly { opacity: 0.9; }
 .hero-trend.up { color: #5dbb63; }
 .hero-trend.down { color: #d9534f; }
 .hero-trend.flat { color: var(--text-muted, #8d8576); }
+
+/* Chars ohne TMB-Account: ausgegraut */
+tr.no-tmb td { opacity: 0.42; filter: saturate(0.45); }
+tr.no-tmb:hover td { opacity: 0.75; }
+.no-tmb-tag {
+  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted, #8d8576);
+  border: 1px solid var(--border, #2a251c);
+  border-radius: 3px; padding: 1px 5px; margin-left: 6px;
+  vertical-align: middle;
+}
