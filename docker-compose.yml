@@ -3,10 +3,8 @@ services:
     build: .
     container_name: cla-webapp
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     volumes:
-      - ./data:/app/data
+      - cla-data:/app/data
       - ./js:/app/js
       - ./css:/app/css
       - ./index.html:/app/index.html
@@ -14,5 +12,13 @@ services:
       - ./db.js:/app/db.js
       - ./preanalyze.js:/app/preanalyze.js
       - ./progression.js:/app/progression.js
-      - ./simulate-live.js:/app/simulate-live.js
       - ./RELEASE_NOTES.md:/app/RELEASE_NOTES.md
+    networks:
+      - pangolin
+
+volumes:
+  cla-data:
+
+networks:
+  pangolin:
+    external: true
