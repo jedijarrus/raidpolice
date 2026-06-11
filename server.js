@@ -7,6 +7,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const cache = require('./db');
 
 const PORT = 3000;
@@ -408,6 +409,26 @@ function getClientIp(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // Große API-JSON-Antworten transparent gzippen (kein Streaming im Einsatz)
+  if (req.url.startsWith('/api/') && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    const _end = res.end.bind(res);
+    const _writeHead = res.writeHead.bind(res);
+    let _status = null, _headers = null;
+    res.writeHead = (st, hd) => { _status = st; _headers = hd || {}; return res; };
+    res.end = (body) => {
+      const headers = _headers || {};
+      const status = _status === null ? 200 : _status;
+      if (status === 200 && body && body.length > 4096) {
+        const gz = zlib.gzipSync(Buffer.isBuffer(body) ? body : Buffer.from(body), { level: 5 });
+        headers['Content-Encoding'] = 'gzip';
+        headers['Vary'] = 'Accept-Encoding';
+        _writeHead(status, headers);
+        return _end(gz);
+      }
+      if (_status !== null) _writeHead(status, headers);
+      return _end(body);
+    };
+  }
   try {
     await handleRequest(req, res);
   } catch (err) {
@@ -2485,25 +2506,60 @@ async function handleRequest(req, res) {
     return;
   }
 
-  fs.readFile(fullPath, (err, data) => {
-    if (err) {
+  fs.stat(fullPath, (stErr, st) => {
+    if (stErr) {
       res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY_HEADERS });
       res.end('Not Found');
       return;
     }
-    let content = data;
-    // Inject CSRF token into HTML pages
-    if (ext === '.html') {
-      content = data.toString().replace('</head>', `<script>window.__csrfToken="${CSRF_TOKEN}";</script>\n</head>`);
+    // ETag aus mtime+size — ändert sich bei jedem Deploy, 304 für alles Unveränderte
+    const etag = `W/"${st.mtimeMs.toString(16)}-${st.size.toString(16)}"`;
+    const cacheControl = ext === '.html' ? 'no-cache' : 'public, max-age=600, must-revalidate';
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Cache-Control': cacheControl, ...SECURITY_HEADERS });
+      res.end();
+      return;
     }
-    res.writeHead(200, {
-      'Content-Type': MIME_TYPES[ext] || 'text/plain',
-      'Cache-Control': 'no-cache',
-      ...SECURITY_HEADERS,
+    fs.readFile(fullPath, (err, data) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY_HEADERS });
+        res.end('Not Found');
+        return;
+      }
+      let content = data;
+      if (ext === '.html') {
+        content = Buffer.from(data.toString().replace('</head>', `<script>window.__csrfToken="${CSRF_TOKEN}";</script>\n</head>`));
+      }
+      const headers = {
+        'Content-Type': MIME_TYPES[ext] || 'text/plain',
+        'Cache-Control': cacheControl,
+        'ETag': etag,
+        'Vary': 'Accept-Encoding',
+        ...SECURITY_HEADERS,
+      };
+      const acceptsGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+      const compressible = /^(\.html|\.js|\.css|\.svg|\.json|\.md|\.xml|\.txt)$/.test(ext);
+      if (acceptsGzip && compressible && content.length > 1024) {
+        const cacheKey = `${fullPath}|${etag}|${ext === '.html' ? 'csrf' : ''}`;
+        let gz = gzipCache.get(cacheKey);
+        if (!gz) {
+          gz = zlib.gzipSync(content, { level: 6 });
+          if (gzipCache.size > 200) gzipCache.clear();
+          gzipCache.set(cacheKey, gz);
+        }
+        headers['Content-Encoding'] = 'gzip';
+        res.writeHead(200, headers);
+        res.end(gz);
+        return;
+      }
+      res.writeHead(200, headers);
+      res.end(content);
     });
-    res.end(content);
   });
 }
+
+// gzip-Cache für statische Dateien (Key enthält ETag → invalidiert sich selbst)
+const gzipCache = new Map();
 
 // FIX #10: Crash handlers
 process.on('uncaughtException', (err) => {
