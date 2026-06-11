@@ -128,6 +128,13 @@ function initSchema() {
       created_by TEXT,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      role TEXT NOT NULL,
+      csrf TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS bug_tickets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -576,7 +583,24 @@ function removeManualReport(reportCode) {
   d.prepare('DELETE FROM manual_reports WHERE report_code = ?').run(reportCode);
 }
 
+
+// ─── Sessions (persistent, überleben Deploys) ───
+function createSessionRow(token, username, role, csrf) {
+  getDb().prepare('INSERT INTO sessions (token, username, role, csrf, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(token, username, role, csrf, Date.now());
+}
+function getSessionRow(token) {
+  return getDb().prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+}
+function deleteSessionRow(token) {
+  getDb().prepare('DELETE FROM sessions WHERE token = ?').run(token);
+}
+function pruneSessions(ttlMs) {
+  getDb().prepare('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - ttlMs);
+}
+
 module.exports = {
+  createSessionRow, getSessionRow, deleteSessionRow, pruneSessions,
   getDb, cacheKey, getTTL, getCached, putCache,
   invalidateReport, invalidateGuild, getCacheStats,
   getAnalysis, putAnalysis,

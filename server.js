@@ -73,29 +73,28 @@ function isLoginRateLimited(ip) {
   return entry.count > LOGIN_RATE_LIMIT;
 }
 
-// ─── Security: server-side sessions ───
-const sessions = new Map(); // sessionToken -> { createdAt, username, role }
+// ─── Security: server-side sessions (persistent in SQLite) ───
 const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const SESSION_COOKIE_NAME = 'cla_session';
 
 function createSession(username, role) {
   const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { createdAt: Date.now(), username, role });
-  return token;
+  const csrf = crypto.randomBytes(32).toString('hex');
+  cache.createSessionRow(token, username, role, csrf);
+  return { token, csrf };
 }
 
 function getSession(req) {
   const cookie = req.headers.cookie || '';
   const match = cookie.match(new RegExp(`${SESSION_COOKIE_NAME}=([a-f0-9]+)`));
   if (!match) return null;
-  const token = match[1];
-  const session = sessions.get(token);
-  if (!session) return null;
-  if (Date.now() - session.createdAt > SESSION_TTL) {
-    sessions.delete(token);
+  const row = cache.getSessionRow(match[1]);
+  if (!row) return null;
+  if (Date.now() - row.created_at > SESSION_TTL) {
+    cache.deleteSessionRow(row.token);
     return null;
   }
-  return session;
+  return { createdAt: row.created_at, username: row.username, role: row.role, csrf: row.csrf };
 }
 
 function validateSession(req) {
@@ -118,12 +117,7 @@ function sessionCookieHeader(token) {
 }
 
 // Prune expired sessions every hour
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, session] of sessions) {
-    if (now - session.createdAt > SESSION_TTL) sessions.delete(token);
-  }
-}, 60 * 60 * 1000);
+setInterval(() => cache.pruneSessions(SESSION_TTL), 60 * 60 * 1000);
 
 // Track running re-analysis jobs
 const reanalyzeJobs = new Map(); // reportCode -> { status, startedAt, error? }
@@ -473,7 +467,9 @@ async function handleRequest(req, res) {
   // ─── CSRF token check for all /api/ requests ───
   if (parsed.pathname.startsWith('/api/')) {
     const token = req.headers['x-csrf-token'];
-    if (token !== CSRF_TOKEN) {
+    const sess = getSession(req);
+    const expected = sess ? sess.csrf : CSRF_TOKEN;
+    if (token !== expected && token !== CSRF_TOKEN) {
       res.writeHead(403, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
       res.end(JSON.stringify({ error: 'Forbidden' }));
       return;
@@ -561,13 +557,13 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ error: 'Falscher Benutzername oder Passwort' }));
         return;
       }
-      const token = createSession(user.username, user.role);
+      const { token, csrf } = createSession(user.username, user.role);
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Set-Cookie': sessionCookieHeader(token),
         ...SECURITY_HEADERS,
       });
-      res.end(JSON.stringify({ ok: true, username: user.username, role: user.role }));
+      res.end(JSON.stringify({ ok: true, username: user.username, role: user.role, csrf }));
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
       res.end(JSON.stringify({ error: 'Bad request' }));

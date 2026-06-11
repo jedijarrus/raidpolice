@@ -6818,6 +6818,7 @@
         return;
       }
       const data = await resp.json();
+      if (data.csrf) window.__csrfToken = data.csrf;
       $('#admin-username').value = '';
       $('#admin-password').value = '';
       showAdminPanel(data.username, data.role);
@@ -7376,8 +7377,8 @@
         if (resp.ok) refreshLiveManualStatus();
       } catch (e) { console.error(e); }
     });
-    refreshLiveManualStatus();
-    setInterval(refreshLiveManualStatus, 30 * 1000);
+    if (adminAuthenticated) refreshLiveManualStatus();
+    setInterval(() => { if (adminAuthenticated) refreshLiveManualStatus(); }, 30 * 1000);
 
     $('#btn-elixir-policy-save')?.addEventListener('click', saveElixirPolicy);
 
@@ -7506,6 +7507,7 @@
   }
 
   async function loadStartDate() {
+    if (!adminAuthenticated) return;
     try {
       const resp = await apiFetch('/api/admin/start-date');
       if (!resp.ok) return;
