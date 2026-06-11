@@ -624,6 +624,114 @@
   }
   const DAY_NAMES_DE = { 1: 'Montag', 2: 'Dienstag', 3: 'Mittwoch', 4: 'Donnerstag', 5: 'Freitag', 6: 'Samstag', 7: 'Sonntag' };
 
+
+  // ─── Summary-Hero: letzter Raid auf einen Blick ───
+  function renderRaidHero(tbcReports) {
+    const el = $('#raid-hero');
+    if (!el) return;
+    if (!tbcReports.length) { el.innerHTML = ''; return; }
+    // Reports des jüngsten Raid-Tags bündeln (Split-Logs)
+    const sorted = tbcReports.slice().sort((a, b) => (b.start || 0) - (a.start || 0));
+    const lastDay = new Date(sorted[0].start); lastDay.setHours(0,0,0,0);
+    const dayReports = sorted.filter(r => { const d = new Date(r.start); d.setHours(0,0,0,0); return d.getTime() === lastDay.getTime(); });
+    let kills = 0, wipes = 0, durMs = 0;
+    const zones = new Set();
+    for (const r of dayReports) {
+      const z = CLA_DATA.zones[r.zone];
+      if (z) zones.add(z.shortName || z.name || '');
+      durMs += (r.end || 0) - (r.start || 0);
+      for (const f of (r.fights || [])) {
+        if (!f.boss || f.boss <= 0) continue;
+        if (f.kill) kills++; else wipes++;
+      }
+    }
+    // Vergleich: vorheriger Raid-Tag mit gleicher Zone
+    let trendHtml = '';
+    const prevDays = sorted.filter(r => { const d = new Date(r.start); d.setHours(0,0,0,0); return d.getTime() < lastDay.getTime(); });
+    const prevSame = prevDays.find(r => zones.has((CLA_DATA.zones[r.zone] || {}).shortName || ''));
+    if (prevSame) {
+      const pd = new Date(prevSame.start); pd.setHours(0,0,0,0);
+      const prevReports = prevDays.filter(r => { const d = new Date(r.start); d.setHours(0,0,0,0); return d.getTime() === pd.getTime() && zones.has((CLA_DATA.zones[r.zone] || {}).shortName || ''); });
+      let pw = 0;
+      for (const r of prevReports) for (const f of (r.fights || [])) { if (f.boss > 0 && !f.kill) pw++; }
+      const diff = wipes - pw;
+      if (diff !== 0) {
+        const better = diff < 0;
+        trendHtml = `<span class="hero-trend ${better ? 'up' : 'down'}">${better ? '▲' : '▼'} ${Math.abs(diff)} Wipes ${better ? 'weniger' : 'mehr'} als letztes Mal</span>`;
+      } else {
+        trendHtml = '<span class="hero-trend flat">— gleich viele Wipes wie letztes Mal</span>';
+      }
+    }
+    const dur = durMs > 0 ? `${Math.floor(durMs / 3600000)}:${String(Math.floor((durMs % 3600000) / 60000)).padStart(2, '0')} h` : '–';
+    const dateStr = lastDay.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+    el.innerHTML = `
+      <div class="raid-hero-card">
+        <div class="raid-hero-label">Letzter Raid · ${escapeHtml(dateStr)} · ${escapeHtml([...zones].join(' + '))}</div>
+        <div class="raid-hero-stats">
+          <div class="hero-stat"><span class="hero-num kills">${kills}</span><span class="hero-cap">Kills</span></div>
+          <div class="hero-stat"><span class="hero-num wipes">${wipes}</span><span class="hero-cap">Wipes</span></div>
+          <div class="hero-stat"><span class="hero-num">${dur}</span><span class="hero-cap">Raidzeit</span></div>
+        </div>
+        ${trendHtml}
+      </div>`;
+  }
+
+  // ─── Boss-Progress: Wipes-bis-Kill + Pull-Dauer über Wochen ───
+  function renderBossProgress(tbcReports) {
+    const el = $('#boss-progress');
+    if (!el) return;
+    // je Boss: chronologische Pulls mit Woche
+    const byBoss = new Map();
+    for (const r of tbcReports) {
+      for (const f of (r.fights || [])) {
+        if (!f.boss || f.boss <= 0) continue;
+        if ((f.size || 0) < 25) continue;
+        if (!byBoss.has(f.name)) byBoss.set(f.name, []);
+        byBoss.get(f.name).push({ ts: (r.start || 0) + (f.start_time || 0), kill: !!f.kill, durMs: (f.end_time || 0) - (f.start_time || 0) });
+      }
+    }
+    // Progress-Bosse: in den letzten 28 Tagen gewiped
+    const now = Date.now();
+    const cards = [];
+    for (const [name, pulls] of byBoss) {
+      pulls.sort((a, b) => a.ts - b.ts);
+      const recent = pulls.filter(p => now - p.ts < 28 * 86400000);
+      const recentWipes = recent.filter(p => !p.kill).length;
+      if (recentWipes < 3) continue; // kein aktiver Progress
+      // Wochen-Buckets
+      const weeks = new Map();
+      for (const p of pulls.slice(-60)) {
+        const d = new Date(p.ts);
+        d.setHours(0,0,0,0); d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+        const k = d.getTime();
+        if (!weeks.has(k)) weeks.set(k, { wipes: 0, kills: 0, bestDur: 0 });
+        const w = weeks.get(k);
+        if (p.kill) w.kills++; else { w.wipes++; w.bestDur = Math.max(w.bestDur, p.durMs); }
+      }
+      const weekList = [...weeks.entries()].sort((a, b) => a[0] - b[0]).slice(-6);
+      const bars = weekList.map(([k, w]) => {
+        const label = new Date(k).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        const best = w.bestDur > 0 ? `${Math.floor(w.bestDur / 60000)}:${String(Math.floor((w.bestDur % 60000) / 1000)).padStart(2, '0')}` : '';
+        return `<div class="bp-week ${w.kills ? 'killed' : ''}">
+          <div class="bp-count">${w.kills ? '✔' : w.wipes}</div>
+          <div class="bp-best">${w.kills ? 'Kill' : best}</div>
+          <div class="bp-date">${label}</div>
+        </div>`;
+      }).join('');
+      const totalWipes = pulls.filter(p => !p.kill).length;
+      const killed = pulls.some(p => p.kill);
+      cards.push(`
+        <div class="bp-card">
+          <div class="bp-head">${escapeHtml(name)} <span class="bp-total">${totalWipes} Wipes gesamt${killed ? ' · liegt' : ''}</span></div>
+          <div class="bp-weeks">${bars}</div>
+          <div class="bp-legend">Zahl = Wipes der Woche · Zeit = längster Pull</div>
+        </div>`);
+    }
+    el.innerHTML = cards.length
+      ? `<div class="bp-section"><h3 class="bp-title">Boss-Progress</h3><div class="bp-grid">${cards.join('')}</div></div>`
+      : '';
+  }
+
   async function renderDashboard(guildName, serverName, region, forceRefresh) {
     $('#guild-title').textContent = guildName;
     $('#guild-subtitle').textContent = `${serverName} (${region}) — ${guildReports.length} Reports`;
@@ -637,6 +745,8 @@
       return z && z.tbc;
     });
     $('#guild-subtitle').textContent = `${serverName} (${region}) — ${tbcReports.length} TBC Reports`;
+    renderRaidHero(tbcReports);
+    renderBossProgress(tbcReports);
 
     // Schedule-Einträge → ein Bucket pro Eintrag
     const cardEntries = schedule.length ? schedule.slice() : [

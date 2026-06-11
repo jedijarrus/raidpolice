@@ -4819,3 +4819,66 @@ body.girly-mode .butterfly { opacity: 0.9; }
 
 .rank-foot { margin-top: 8px; font-size: 0.82rem; }
 .rank-foot .dmg-split-bar { margin-top: 4px; }
+
+/* ── Summary-Hero (Raids-Tab) ── */
+.raid-hero-card {
+  background: linear-gradient(135deg, var(--card-bg, #1a1610) 0%, rgba(212, 168, 67, 0.06) 100%);
+  border: 1px solid var(--border, #2a251c);
+  border-left: 3px solid #d4a843;
+  border-radius: 8px;
+  padding: 18px 24px;
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.raid-hero-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #8d8576);
+}
+.raid-hero-stats { display: flex; gap: 28px; }
+.hero-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hero-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hero-num.kills { color: #5dbb63; }
+.hero-num.wipes { color: #d9534f; }
+.hero-cap { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted, #8d8576); }
+.hero-trend { font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border, #2a251c); }
+.hero-trend.up { color: #5dbb63; }
+.hero-trend.down { color: #d9534f; }
+.hero-trend.flat { color: var(--text-muted, #8d8576); }
+
+/* ── Boss-Progress ── */
+.bp-section { margin-top: 28px; }
+.bp-title {
+  font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted, #8d8576); margin-bottom: 12px;
+}
+.bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.bp-card {
+  background: var(--card-bg, #1a1610);
+  border: 1px solid var(--border, #2a251c);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.bp-head { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.bp-total { font-size: 11px; font-weight: 400; color: var(--text-muted, #8d8576); margin-left: 8px; }
+.bp-weeks { display: flex; gap: 8px; }
+.bp-week {
+  flex: 1; text-align: center;
+  background: rgba(217, 83, 79, 0.08);
+  border: 1px solid rgba(217, 83, 79, 0.25);
+  border-radius: 6px; padding: 7px 4px;
+}
+.bp-week.killed {
+  background: rgba(93, 187, 99, 0.1);
+  border-color: rgba(93, 187, 99, 0.35);
+}
+.bp-count { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bp-week.killed .bp-count { color: #5dbb63; }
+.bp-week:not(.killed) .bp-count { color: #d9534f; }
+.bp-best { font-size: 10px; color: var(--text-muted, #8d8576); margin-top: 1px; }
+.bp-date { font-size: 9px; color: var(--text-muted, #8d8576); opacity: 0.7; margin-top: 3px; }
+.bp-legend { font-size: 10px; color: var(--text-muted, #8d8576); margin-top: 8px; opacity: 0.8; }
