@@ -3843,6 +3843,10 @@ function reportStep(state) { try { progressReporter(state); } catch (_) {} }
 
 module.exports = {
   checkAndAnalyzeNewReports, processReport, analyzeLiveFight, wclApi, classNameFromType, isValidClass, CLA_DATA, setProgressReporter,
+  // Pure Checker-Funktionen — für Tests exportiert
+  isMetaGemActive, getMissingScrolls, formatScrollWithRank, getScrollRequirementsForRole,
+  detectWeaponEnhancement, hasWeaponEnh, getExpectedCdsForRole, getPlayerFightRole,
+  getPlayersFromSummary, getPlayerDetailMap,
   // Tracking-Config Read-Only Dumps (für Admin-UI)
   getTrackingConfig: () => ({
     consumableBuffs: CONSUMABLE_BUFF_IDS,
