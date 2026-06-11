@@ -3290,6 +3290,23 @@
       }
     }
     columns.sort((a, b) => b.ts - a.ts);
+    // Standard: nur die letzten 6 Wochen — Rest hinter Toggle (Matrix sonst endlos breit)
+    const _allWeekKeys = [...new Set(columns.map(c => c.week))];
+    const PROG_DEFAULT_WEEKS = 6;
+    let prunedColumns = columns;
+    let _hiddenWeeks = 0;
+    if (!window._progShowAllWeeks && _allWeekKeys.length > PROG_DEFAULT_WEEKS) {
+      const _keep = new Set(_allWeekKeys.slice(0, PROG_DEFAULT_WEEKS));
+      _hiddenWeeks = _allWeekKeys.length - PROG_DEFAULT_WEEKS;
+      prunedColumns = columns.filter(c => _keep.has(c.week));
+    }
+    const _weeksBtn = document.getElementById('btn-prog-weeks');
+    if (_weeksBtn) {
+      _weeksBtn.classList.toggle('hidden', _allWeekKeys.length <= PROG_DEFAULT_WEEKS);
+      _weeksBtn.textContent = window._progShowAllWeeks ? 'Nur letzte 6 Wochen' : `Alle ${_allWeekKeys.length} Wochen anzeigen`;
+    }
+    columns.length = 0;
+    columns.push(...prunedColumns);
     const totalCols = columns.length;
 
     // Build week spans for the top header row
@@ -4318,6 +4335,12 @@
     const btnLeg = $('#btn-prog-track-legacy');
     if (btnCurr) btnCurr.addEventListener('click', () => setTrack('current'));
     if (btnLeg) btnLeg.addEventListener('click', () => setTrack('legacy'));
+    const btnWeeks = $('#btn-prog-weeks');
+    if (btnWeeks) btnWeeks.addEventListener('click', () => {
+      window._progShowAllWeeks = !window._progShowAllWeeks;
+      const lp = window._lastProgression;
+      if (lp) renderProgression(lp.players, lp.reportMeta, lp.reportCount, lp.weekCount, lp.settings, lp.tmbRaidDays, lp.tmbCharsByDayKey, lp.tmbBenchedByDayKey, lp.lootByPlayer, window._tmbRaidGroups, lp.allWeeks);
+    });
   }
 
   // ─── ADMIN ───
