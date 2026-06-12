@@ -8152,18 +8152,20 @@
       }
     }
 
-    // Cata-Bolt auf Karathress als Tabelle
+    // Lowest Karma — Cataclysmic Bolt auf Karathress (random target, also reine Karma-Frage)
     const cataKey = 'Fathom-Lord Karathress|Cataclysmic Bolt';
     const cataAgg = deathCauseAgg.get(cataKey);
     if (cataAgg) {
       const victimsSorted = Object.entries(cataAgg.victims).sort((a, b) => b[1] - a[1]);
-      groups.survival.push(statsTable('☠️ Cataclysmic Bolt (Karathress) — Random-Target-Tode', ['#', 'Spieler', 'Tode'],
+      const tableHtml = statsTable('☠️ Lowest Karma', ['#', 'Spieler', 'Tode'],
         victimsSorted.map(([name, count], i) => {
           const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
           const css = classCssFromType(cataAgg.types[name] || '');
           return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(name)}</span></td><td><strong>${count}</strong></td>`;
         })
-      ));
+      );
+      const wrapped = tableHtml.replace('</h4>', `</h4><p class="text-muted" style="margin-top:-8px;margin-bottom:8px;font-size:0.78rem">Cataclysmic Bolt (Karathress) — pickt random Targets. Wer hier oben steht hat einfach beschissene Karma, niemand kann ausweichen.</p>`);
+      groups.shame.push(wrapped);
     }
 
     // ── Aggregate consumables across all reports ──
@@ -8401,22 +8403,44 @@
       ));
     }
 
-    // 🧽 Loot-Schwamm — Top-Loot-Empfänger pro Spieler (Mainspec separat von Offspec)
-    const lootByPlayer = new Map(); // name → { cls, main, off }
+    // 🧽 Loot-Schwamm — pro Char + pro Spieler (via TMB charToMember-Mapping)
+    const lootByChar = new Map(); // char → { cls, main, off }
     for (const l of ((window._tmbLoot && window._tmbLoot.loot) || [])) {
       if (!l.character || statsExcluded.has(l.character)) continue;
-      const ex = lootByPlayer.get(l.character) || { cls: l.class || '', main: 0, off: 0 };
+      const ex = lootByChar.get(l.character) || { cls: l.class || '', main: 0, off: 0 };
       if (l.class) ex.cls = l.class;
       if (l.offspec) ex.off++; else ex.main++;
-      lootByPlayer.set(l.character, ex);
+      lootByChar.set(l.character, ex);
     }
-    const lootSorted = [...lootByPlayer.entries()].sort((a, b) => (b[1].main + b[1].off) - (a[1].main + a[1].off));
-    if (lootSorted.length) {
-      groups.shame.push(statsTable('Loot-Schwamm', ['#', 'Spieler', 'Mainspec', 'Offspec', 'Gesamt'],
-        lootSorted.slice(0, 15).map(([name, info], i) => {
+    // Pro Char
+    const lootCharSorted = [...lootByChar.entries()].sort((a, b) => (b[1].main + b[1].off) - (a[1].main + a[1].off));
+    if (lootCharSorted.length) {
+      groups.shame.push(statsTable('Loot-Schwamm pro Char', ['#', 'Char', 'Mainspec', 'Offspec', 'Gesamt'],
+        lootCharSorted.slice(0, 15).map(([name, info], i) => {
           const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
           const css = classCssFromType(info.cls);
           return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(name)}</span></td><td>${info.main}</td><td>${info.off}</td><td><strong>${info.main + info.off}</strong></td>`;
+        })
+      ));
+    }
+    // Pro Spieler (alle Chars eines Members aggregiert)
+    const charToMember = (window._tmbRaidGroups && window._tmbRaidGroups.charToMember) || {};
+    const lootByMember = new Map(); // member → { main, off, chars: Set }
+    for (const [char, info] of lootByChar) {
+      const member = charToMember[char] || char;
+      const ex = lootByMember.get(member) || { main: 0, off: 0, chars: new Set() };
+      ex.main += info.main;
+      ex.off += info.off;
+      ex.chars.add(char);
+      lootByMember.set(member, ex);
+    }
+    const lootMemberSorted = [...lootByMember.entries()].sort((a, b) => (b[1].main + b[1].off) - (a[1].main + a[1].off));
+    if (lootMemberSorted.length) {
+      groups.shame.push(statsTable('Loot-Schwamm pro Spieler', ['#', 'Spieler', 'Chars', 'Mainspec', 'Offspec', 'Gesamt'],
+        lootMemberSorted.slice(0, 15).map(([member, info], i) => {
+          const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
+          const charsStr = [...info.chars].sort().join(', ');
+          return `<td${medal}>${i + 1}</td><td><strong>${escapeHtml(member)}</strong></td><td><small class="text-muted">${escapeHtml(charsStr)}</small></td><td>${info.main}</td><td>${info.off}</td><td><strong>${info.main + info.off}</strong></td>`;
         })
       ));
     }
