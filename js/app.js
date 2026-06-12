@@ -8096,6 +8096,27 @@
     // Excluded players — filter from all stats
     const statsExcluded = window._excludedPlayerSet || new Set();
 
+    // statsTable helper hochgezogen — Phoenix/Loot/Karma-Tabs werden früher gebaut als
+    // die alte Position weiter unten erlaubte (TDZ-Crash sonst).
+    const fmtK = n => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(0) + 'k' : String(n);
+    let statsTableId = 0;
+    function statsTable(title, headers, rows, topN = 5) {
+      if (!rows.length) return '';
+      const id = 'stats-expand-' + (statsTableId++);
+      let h = `<div class="stats-section"><h4 class="stats-subtitle">${title}</h4>`;
+      h += `<table class="results-table stats-table sortable-table"><thead><tr>${headers.map((th, ci) => `<th class="sortable-th" data-col="${ci}">${th}</th>`).join('')}</tr></thead><tbody>`;
+      for (let i = 0; i < rows.length; i++) {
+        const hiddenCls = i >= topN ? ` class="stats-hidden-row ${id} hidden"` : '';
+        h += `<tr${hiddenCls}>${rows[i]}</tr>`;
+      }
+      h += '</tbody></table>';
+      if (rows.length > topN) {
+        h += `<button class="btn btn-sm stats-expand-btn" data-stats-expand="${id}">Alle ${rows.length} anzeigen &#9660;</button>`;
+      }
+      h += '</div>';
+      return h;
+    }
+
     // ── Aggregate deaths across all reports ──
     const deathsByPlayer = new Map(); // name -> { type, totalDeaths, fightDeaths: [{report, fight, deaths}] }
     const deathsByFight = new Map(); // fightName -> { totalDeaths, wipeDeaths, killDeaths, count }
@@ -8281,26 +8302,6 @@
           pd.fightCount++;
         }
       }
-    }
-
-    // ── Helpers ──
-    const fmtK = n => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(0) + 'k' : String(n);
-    let statsTableId = 0;
-    function statsTable(title, headers, rows, topN = 5) {
-      if (!rows.length) return '';
-      const id = 'stats-expand-' + (statsTableId++);
-      let h = `<div class="stats-section"><h4 class="stats-subtitle">${title}</h4>`;
-      h += `<table class="results-table stats-table sortable-table"><thead><tr>${headers.map((th, ci) => `<th class="sortable-th" data-col="${ci}">${th}</th>`).join('')}</tr></thead><tbody>`;
-      for (let i = 0; i < rows.length; i++) {
-        const hiddenCls = i >= topN ? ` class="stats-hidden-row ${id} hidden"` : '';
-        h += `<tr${hiddenCls}>${rows[i]}</tr>`;
-      }
-      h += '</tbody></table>';
-      if (rows.length > topN) {
-        h += `<button class="btn btn-sm stats-expand-btn" data-stats-expand="${id}">Alle ${rows.length} anzeigen &#9660;</button>`;
-      }
-      h += '</div>';
-      return h;
     }
 
     // ── Aggregate Consumes per Item-Name über alle Reports + Spieler ──
