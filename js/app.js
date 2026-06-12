@@ -1225,9 +1225,11 @@
         $('#wipes-results').innerHTML = '<p class="text-muted">Analyse noch nicht verfügbar. Pre-Analyzer hat sie noch nicht gerechnet.</p>';
       }
 
-      // Parry-Haste-Section unten anhängen
+      // Parry-Haste Tab
       if (analysis.parries && analysis.parries.length) {
-        renderParriesSection(analysis.parries);
+        renderParriesTab(analysis.parries);
+      } else {
+        $('#parries-results').innerHTML = '<p class="text-muted">Parry-Haste-Analyse noch nicht verfügbar.</p>';
       }
 
     } catch (err) {
@@ -5548,10 +5550,9 @@
   }
 
   // Report-Tab Wipe-Analyse: wiederverwendet die Renderer aus dem Admin-Wipes-Tab
-  function renderParriesSection(parriesData) {
-    const host = $('#wipes-results');
+  function renderParriesTab(parriesData) {
+    const host = $('#parries-results');
     if (!host) return;
-    // Aggregate per player across all fights, separate per fight rows
     const perPlayer = new Map();
     const fightsWithParries = [];
     for (const f of parriesData) {
@@ -5564,24 +5565,28 @@
         perPlayer.set(p.name, cur);
       }
     }
-    if (!perPlayer.size) return;
+    if (!perPlayer.size) {
+      host.innerHTML = '<p class="text-muted">Keine non-Tank Parries in diesem Report.</p>';
+      return;
+    }
     const sorted = [...perPlayer.values()].sort((a, b) => b.total - a.total);
-    let html = '<details class="parries-section" open style="margin-top:24px"><summary><strong>⚔ Parry-Haste-Meister</strong> <small class="text-muted">— non-Tanks die Boss-Melee parried haben (snapshottet Swing-Timer)</small></summary>';
-    html += '<table class="results-table" style="margin-top:12px"><thead><tr><th>Spieler</th><th>Σ Parries</th><th>Auf wie vielen Fights</th></tr></thead><tbody>';
+    let html = '<p class="text-muted">Non-Tanks die mit Melee-Schwung in den Boss reingerannt sind und einen Parry kassiert haben → Boss-Swing-Timer snappt = extra Tank-Hit. Klassischer Wipe-Verursacher.</p>';
+    html += '<h3 style="margin-top:18px">Gesamt-Ranking</h3>';
+    html += '<table class="results-table"><thead><tr><th>Spieler</th><th>Σ Parries</th><th>Fights betroffen</th></tr></thead><tbody>';
     for (const p of sorted) {
       const css = classCssFromType(p.type);
       html += `<tr><td><span class="${css}">${renderPlayerName(p.name)}</span></td><td><strong>${p.total}</strong></td><td>${p.fights}</td></tr>`;
     }
     html += '</tbody></table>';
-    html += '<h4 style="margin-top:18px">Pro Fight</h4>';
+    html += '<h3 style="margin-top:24px">Pro Fight</h3>';
     html += '<table class="results-table"><thead><tr><th>Boss</th><th>Result</th><th>Parry-Sünder</th></tr></thead><tbody>';
     for (const f of fightsWithParries) {
       const cells = f.parries.map(p => `<span class="${classCssFromType(p.type)}">${renderPlayerName(p.name)}</span> <strong>${p.count}×</strong>`).join(', ');
       const badge = f.kill ? '<span class="kill-badge">Kill</span>' : '<span class="wipe-badge">Wipe</span>';
       html += `<tr><td>${escapeHtml(f.fightName)}</td><td>${badge}</td><td>${cells}</td></tr>`;
     }
-    html += '</tbody></table></details>';
-    host.insertAdjacentHTML('beforeend', html);
+    html += '</tbody></table>';
+    host.innerHTML = html;
   }
 
   function renderReportWipes(wipes, reportData) {
@@ -8227,6 +8232,31 @@
           }
         }
       }
+    }
+
+    // 🤡 Die Verwirrten — non-tank Parries gegen Bosse (Parry-Haste-Verursacher)
+    const verwirrtByPlayer = new Map();
+    for (const { bundle } of bundles) {
+      const parries = bundle.analysis && bundle.analysis.parries;
+      if (!parries || !parries.length) continue;
+      for (const f of parries) {
+        for (const p of (f.parries || [])) {
+          if (statsExcluded.has(p.name)) continue;
+          const cur = verwirrtByPlayer.get(p.name) || { name: p.name, type: p.type, total: 0 };
+          cur.total += p.count;
+          verwirrtByPlayer.set(p.name, cur);
+        }
+      }
+    }
+    const verwirrtSorted = [...verwirrtByPlayer.values()].sort((a, b) => b.total - a.total);
+    if (verwirrtSorted.length) {
+      groups.shame.push(statsTable('🤡 Die Verwirrten', ['#', 'Spieler', 'Parries'],
+        verwirrtSorted.map((p, i) => {
+          const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
+          const css = classCssFromType(p.type);
+          return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(p.name)}</span></td><td><strong>${p.total}</strong></td>`;
+        })
+      ));
     }
 
     // Lowest Karma — Cataclysmic Bolt auf Karathress (random target, also reine Karma-Frage)

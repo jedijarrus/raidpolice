@@ -2385,7 +2385,7 @@ async function handleRequest(req, res) {
       // nur die Analyse-Typen die die Stats-Seite tatsächlich liest, sonst sprengt
       // die Payload (32+ MB). Schweres wie gear/spellranks/wipes/trinkets/cooldowns/
       // avoidable/consumablesTrash/consumablesAll wird verworfen.
-      const STATS_KEYS = ['buffs', 'consumables', 'deaths', 'dmgheal', 'damagetaken', 'drums'];
+      const STATS_KEYS = ['buffs', 'consumables', 'deaths', 'parries', 'dmgheal', 'damagetaken', 'drums'];
       const bundles = [];
       for (const r of filtered) {
         const b = cache.getReportBundle(r.id);
