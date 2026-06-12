@@ -5813,9 +5813,13 @@
   function renderStatusLine(w) {
     const ex = w.extended || {};
     const pills = [];
-    // Tank-Tode
+    // Tank-Tode + Parries vor Tod (Verursacher)
     if (ex.tankInfo && ex.tankInfo.deaths && ex.tankInfo.deaths.length) {
-      const list = ex.tankInfo.deaths.map(t => `${escapeHtml(t.name)} @ ${fmtMmss(t.atSec)}`).join(', ');
+      const list = ex.tankInfo.deaths.map(t => {
+        const pr = (t.parriesBeforeDeath || []);
+        const prStr = pr.length ? ` | Parries 5s vor Tod: ${pr.map(p => p.name + '×' + p.count).join(', ')}` : '';
+        return `${escapeHtml(t.name)} @ ${fmtMmss(t.atSec)}${prStr}`;
+      }).join(' / ');
       pills.push({ icon: '🛡', value: `${ex.tankInfo.deaths.length}× Tank-Tod`, tooltip: list, severity: 'danger' });
     }
     // OOM Healers
@@ -5918,10 +5922,16 @@
     if (stuck) {
       bullets.push({ icon: '🛑', text: `Boss-DMG-Stillstand: ${escapeHtml(stuck.value)}.` });
     }
-    // Tank-Tode (Liste)
+    // Tank-Tode (Liste) + Parries vor Tod
     if (ex.tankInfo && ex.tankInfo.deaths && ex.tankInfo.deaths.length) {
       const list = ex.tankInfo.deaths.map(t => `${escapeHtml(t.name)} @ ${fmtMmss(t.atSec)}`).join(', ');
       bullets.push({ icon: '🛡', text: `Tank-Tode: ${list}.` });
+      for (const td of ex.tankInfo.deaths) {
+        const pr = td.parriesBeforeDeath || [];
+        if (!pr.length) continue;
+        const sinners = pr.map(p => `<span class="${classCssFromType(p.type)}">${renderPlayerName(p.name)}</span> ×${p.count}`).join(', ');
+        bullets.push({ icon: '⚔', text: `Parry-Haste 5s vor ${escapeHtml(td.name)}'s Tod: ${sinners}.` });
+      }
     }
     // Healer-Mana-Minima
     const lowMana = [];

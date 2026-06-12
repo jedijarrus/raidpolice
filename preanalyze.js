@@ -1744,12 +1744,38 @@ async function fetchExtendedWipeData(reportCode, fightId, fightStart, fightEnd, 
     for (const tn of tanks) {
       const d = (deathEntries || []).find(e => e.name === tn.name);
       if (d) {
-        tankInfo.deaths.push({ name: tn.name, atSec: +((d.timestamp - fightStart) / 1000).toFixed(1) });
+        tankInfo.deaths.push({ name: tn.name, atSec: +((d.timestamp - fightStart) / 1000).toFixed(1), timestamp: d.timestamp });
       }
     }
   }
   if (tankInfo.deaths.length && tankInfo.deaths[0].atSec < durationSec * 0.5) {
-    tankInfo.earlyTankDeath = tankInfo.deaths[0];  // critical signal
+    tankInfo.earlyTankDeath = tankInfo.deaths[0];
+  }
+
+  // === 5b. Non-Tank Parries vor Tank-Tod (Parry-Haste-Snapshot → Boss kettet extra Hit) ===
+  if (tankInfo.deaths.length) {
+    const tankSet = new Set(tankInfo.tankNames);
+    const playerById = new Map((players || []).map(p => [p.id, p]));
+    const dmgEv = await wclApi(`/report/events/damage-done/${reportCode}`, {
+      start: fightStart, end: fightEnd
+    }).catch(() => ({ events: [] }));
+    const PARRY_WINDOW_MS = 5000;
+    for (const td of tankInfo.deaths) {
+      const byPlayer = new Map();
+      for (const e of (dmgEv.events || [])) {
+        if (e.hitType !== 8) continue;
+        if (!e.ability || e.ability.guid !== 1) continue;
+        if (!e.sourceIsFriendly) continue;
+        if (e.timestamp > td.timestamp) continue;
+        if (td.timestamp - e.timestamp > PARRY_WINDOW_MS) continue;
+        const p = playerById.get(e.sourceID);
+        if (!p || tankSet.has(p.name)) continue;
+        const cur = byPlayer.get(p.name) || { name: p.name, type: p.type, count: 0 };
+        cur.count++;
+        byPlayer.set(p.name, cur);
+      }
+      td.parriesBeforeDeath = [...byPlayer.values()].sort((a, b) => b.count - a.count);
+    }
   }
 
   // === 6. Cancelled Casts ===
