@@ -2381,11 +2381,23 @@ async function handleRequest(req, res) {
       const startTs = startDateStr ? new Date(startDateStr + 'T00:00:00').getTime() : 0;
       // Nur 25er TBC Reports, nicht excluded, nach startTs
       const filtered = allReports.filter(r => !excluded.has(r.id) && (!startTs || r.start >= startTs));
-      // Bundles pro Report (nur die mit report_data drin)
+      // Bundles pro Report (nur die mit report_data drin). Schlanke Variante:
+      // nur die Analyse-Typen die die Stats-Seite tatsächlich liest, sonst sprengt
+      // die Payload (32+ MB). Schweres wie gear/spellranks/wipes/trinkets/cooldowns/
+      // avoidable/consumablesTrash/consumablesAll wird verworfen.
+      const STATS_KEYS = ['buffs', 'consumables', 'deaths', 'dmgheal', 'damagetaken', 'drums'];
       const bundles = [];
       for (const r of filtered) {
         const b = cache.getReportBundle(r.id);
-        if (b) bundles.push({ report: r, bundle: b });
+        if (!b) continue;
+        const slim = {
+          meta: b.meta,
+          fights: b.fights,
+          players: b.players,
+          analysis: {},
+        };
+        for (const k of STATS_KEYS) if (b.analysis[k]) slim.analysis[k] = b.analysis[k];
+        bundles.push({ report: r, bundle: slim });
       }
       const payload = { bundles, computedAt: Date.now() };
       cache.putComputedView(VIEW_KEY, JSON.stringify(payload));
