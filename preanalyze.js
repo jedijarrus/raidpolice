@@ -1492,8 +1492,9 @@ async function analyzeDamageHealing(reportCode, bossFights) {
 
 // ─── Deaths Analysis ───
 
-// Parry-Haste-Tracking: melee-parries durch nicht-Tanks (= ungewollt, snapshottet Boss-Swing-Timer).
-// hitType=8 in WCL = parry. Source = Boss/Adds (sourceIsFriendly=false), Ability guid=1 (Melee).
+// Parry-Haste-Tracking: Spieler-Melee-Schwung wird vom Boss geparried → Boss snapshottet
+// Swing-Timer = extra Hit auf den Tank. hitType=8 = parry, ability.guid=1 = Melee,
+// sourceIsFriendly=true = Spieler. Non-tank source verursacht Parry-Haste.
 async function analyzeParries(reportCode, bossFights, playerList) {
   const results = [];
   const idMap = new Map(playerList.map(p => [p.id, p]));
@@ -1505,16 +1506,17 @@ async function analyzeParries(reportCode, bossFights, playerList) {
     if (summary && summary.playerDetails && summary.playerDetails.tanks) {
       for (const t of summary.playerDetails.tanks) tankNames.add(t.name);
     }
-    const evResp = await wclApi(`/report/events/damage-taken/${reportCode}`, {
-      start: f.start_time, end: f.end_time, hostility: 0
+    const evResp = await wclApi(`/report/events/damage-done/${reportCode}`, {
+      start: f.start_time, end: f.end_time
     }).catch(() => ({ events: [] }));
     const byPlayer = new Map();
     for (const e of (evResp.events || [])) {
       if (e.hitType !== 8) continue;
-      if (!e.ability || e.ability.guid !== 1) continue; // nur Melee
-      const p = idMap.get(e.targetID);
+      if (!e.ability || e.ability.guid !== 1) continue;
+      if (!e.sourceIsFriendly) continue;
+      const p = idMap.get(e.sourceID);
       if (!p) continue;
-      if (tankNames.has(p.name)) continue; // Tanks rausnehmen
+      if (tankNames.has(p.name)) continue;
       const cur = byPlayer.get(p.name) || { name: p.name, type: p.type, count: 0 };
       cur.count++;
       byPlayer.set(p.name, cur);
@@ -3878,21 +3880,22 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
   cdUsage.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   cdSlackers.sort((a, b) => a.name.localeCompare(b.name));
 
-  // Parry-Haste: non-tank melee parries vom Boss/Adds. hitType=8 = parry.
+  // Parry-Haste: Spieler-Melee vom Boss geparried = Swing-Timer-Snap. hitType=8.
   const parries = [];
   try {
     const tankSet = new Set();
     const pd = summary && summary.playerDetails || {};
     for (const t of (pd.tanks || [])) tankSet.add(t.name);
-    const evResp = await wclApi(`/report/events/damage-taken/${reportCode}`, {
-      start: fight.start_time, end: fight.end_time, hostility: 0
+    const evResp = await wclApi(`/report/events/damage-done/${reportCode}`, {
+      start: fight.start_time, end: fight.end_time
     }, { nocache: true }).catch(() => ({ events: [] }));
     const idMap = new Map(players.map(p => [p.id, p]));
     const byPlayer = new Map();
     for (const e of (evResp.events || [])) {
       if (e.hitType !== 8) continue;
       if (!e.ability || e.ability.guid !== 1) continue;
-      const p = idMap.get(e.targetID);
+      if (!e.sourceIsFriendly) continue;
+      const p = idMap.get(e.sourceID);
       if (!p || tankSet.has(p.name)) continue;
       const cur = byPlayer.get(p.name) || { name: p.name, type: p.type, count: 0 };
       cur.count++;
