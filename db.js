@@ -466,7 +466,7 @@ function getReportBundle(reportCode) {
   const rd = getReportData(reportCode);
   if (!rd) return null;
   const analyses = {};
-  for (const type of ['gear', 'buffs', 'consumables', 'consumablesTrash', 'spellranks', 'deaths', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes', 'trinkets', 'cooldowns']) {
+  for (const type of ['gear', 'buffs', 'consumables', 'consumablesTrash', 'spellranks', 'deaths', 'parries', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes', 'trinkets', 'cooldowns']) {
     const row = d.prepare('SELECT result_json, analyzed_at FROM report_analysis WHERE report_code = ? AND analysis_type = ? AND settings_hash = ?')
       .get(reportCode, type, 'all');
     analyses[type] = row ? JSON.parse(row.result_json) : null;

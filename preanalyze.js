@@ -1492,6 +1492,41 @@ async function analyzeDamageHealing(reportCode, bossFights) {
 
 // ─── Deaths Analysis ───
 
+// Parry-Haste-Tracking: melee-parries durch nicht-Tanks (= ungewollt, snapshottet Boss-Swing-Timer).
+// hitType=8 in WCL = parry. Source = Boss/Adds (sourceIsFriendly=false), Ability guid=1 (Melee).
+async function analyzeParries(reportCode, bossFights, playerList) {
+  const results = [];
+  const idMap = new Map(playerList.map(p => [p.id, p]));
+  for (const f of bossFights) {
+    const summary = await wclApi(`/report/tables/summary/${reportCode}`, {
+      start: f.start_time, end: f.end_time, translate: true
+    }).catch(() => null);
+    const tankNames = new Set();
+    if (summary && summary.playerDetails && summary.playerDetails.tanks) {
+      for (const t of summary.playerDetails.tanks) tankNames.add(t.name);
+    }
+    const evResp = await wclApi(`/report/events/damage-taken/${reportCode}`, {
+      start: f.start_time, end: f.end_time, hostility: 0
+    }).catch(() => ({ events: [] }));
+    const byPlayer = new Map();
+    for (const e of (evResp.events || [])) {
+      if (e.hitType !== 8) continue;
+      if (!e.ability || e.ability.guid !== 1) continue; // nur Melee
+      const p = idMap.get(e.targetID);
+      if (!p) continue;
+      if (tankNames.has(p.name)) continue; // Tanks rausnehmen
+      const cur = byPlayer.get(p.name) || { name: p.name, type: p.type, count: 0 };
+      cur.count++;
+      byPlayer.set(p.name, cur);
+    }
+    results.push({
+      fightId: f.id, fightName: f.name, kill: f.kill,
+      parries: [...byPlayer.values()].sort((a, b) => b.count - a.count),
+    });
+  }
+  return results;
+}
+
 async function analyzeDeaths(reportCode, bossFights) {
   const results = [];
   for (const f of bossFights) {
@@ -3117,7 +3152,7 @@ async function processReport(reportCode) {
   // recompute — otherwise cached analyses stay frozen on a subset of fights.
   const PER_FIGHT_TYPES = ['gear', 'buffs', 'consumables', 'consumablesTrash', 'spellranks',
                            'deaths', 'dmgheal', 'damagetaken', 'drums', 'avoidable', 'wipes',
-                           'trinkets', 'cooldowns'];
+                           'trinkets', 'cooldowns', 'parries'];
 
   // Check for report growth before anything else (live logging / in-progress raid)
   let reportDataPrefetched = null;
@@ -3149,6 +3184,7 @@ async function processReport(reportCode) {
   const needConsAll = !hasCached('consumablesTrash');
   const needSpellRanks = !hasCached('spellranks');
   const needDeaths = !hasCached('deaths');
+  const needParries = !hasCached('parries');
   const needDmgHeal = !hasCached('dmgheal');
   const needDmgTaken = !hasCached('damagetaken');
   const needDrums = !hasCached('drums');
@@ -3157,7 +3193,7 @@ async function processReport(reportCode) {
   const needTrinkets = !hasCached('trinkets');
   const needCooldowns = !hasCached('cooldowns');
 
-  if (!needGear && !needBuffs && !needCons && !needConsAll && !needSpellRanks && !needDeaths && !needDmgHeal && !needDmgTaken && !needDrums && !needAvoidable && !needWipes && !needTrinkets && !needCooldowns && hasReportData) {
+  if (!needGear && !needBuffs && !needCons && !needConsAll && !needSpellRanks && !needDeaths && !needParries && !needDmgHeal && !needDmgTaken && !needDrums && !needAvoidable && !needWipes && !needTrinkets && !needCooldowns && hasReportData) {
     return false; // already fully analyzed and report has not grown
   }
 
@@ -3266,6 +3302,16 @@ async function processReport(reportCode) {
       const totalDeaths = result.reduce((s, f) => s + f.deaths.reduce((s2, d) => s2 + d.deaths, 0), 0);
       console.log(`[PRE] ${reportCode}: deaths done (${totalDeaths} total deaths)`);
     } catch (e) { console.error(`[PRE] ${reportCode}: deaths failed:`, e.message); }
+  }
+
+  if (needParries) {
+    reportStep({ reportCode, step: 'parries' });
+    try {
+      const result = await analyzeParries(reportCode, bossFights, playerList);
+      cache.putAnalysis(reportCode, 'parries', sh, JSON.stringify(result));
+      const totalParries = result.reduce((s, f) => s + f.parries.reduce((s2, p) => s2 + p.count, 0), 0);
+      console.log(`[PRE] ${reportCode}: parries done (${totalParries} non-tank parries)`);
+    } catch (e) { console.error(`[PRE] ${reportCode}: parries failed:`, e.message); }
   }
 
   if (needDmgHeal) {
@@ -3832,6 +3878,30 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
   cdUsage.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   cdSlackers.sort((a, b) => a.name.localeCompare(b.name));
 
+  // Parry-Haste: non-tank melee parries vom Boss/Adds. hitType=8 = parry.
+  const parries = [];
+  try {
+    const tankSet = new Set();
+    const pd = summary && summary.playerDetails || {};
+    for (const t of (pd.tanks || [])) tankSet.add(t.name);
+    const evResp = await wclApi(`/report/events/damage-taken/${reportCode}`, {
+      start: fight.start_time, end: fight.end_time, hostility: 0
+    }, { nocache: true }).catch(() => ({ events: [] }));
+    const idMap = new Map(players.map(p => [p.id, p]));
+    const byPlayer = new Map();
+    for (const e of (evResp.events || [])) {
+      if (e.hitType !== 8) continue;
+      if (!e.ability || e.ability.guid !== 1) continue;
+      const p = idMap.get(e.targetID);
+      if (!p || tankSet.has(p.name)) continue;
+      const cur = byPlayer.get(p.name) || { name: p.name, type: p.type, count: 0 };
+      cur.count++;
+      byPlayer.set(p.name, cur);
+    }
+    for (const v of byPlayer.values()) parries.push(v);
+    parries.sort((a, b) => b.count - a.count);
+  } catch (_) {}
+
   return {
     slackers: { buffs: buffSlackers, spellranks: spellrankSlackers },
     consumables,
@@ -3840,6 +3910,7 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     trinketSlackers,
     cdUsage,
     cdSlackers,
+    parries,
     totalPlayers: players.length,
   };
 }

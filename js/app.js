@@ -1225,6 +1225,11 @@
         $('#wipes-results').innerHTML = '<p class="text-muted">Analyse noch nicht verfügbar. Pre-Analyzer hat sie noch nicht gerechnet.</p>';
       }
 
+      // Parry-Haste-Section unten anhängen
+      if (analysis.parries && analysis.parries.length) {
+        renderParriesSection(analysis.parries);
+      }
+
     } catch (err) {
       hideLoading();
       alert('Fehler: ' + err.message);
@@ -4214,6 +4219,20 @@
       }
       html += '</section>';
 
+      // ─── Card 7: Parry-Haste (non-tank Spieler die Boss-Melee parried haben) ───
+      const parryList = f.parries || [];
+      if (parryList.length) {
+        html += '<section class="live-card live-card--parries">';
+        html += `<header class="live-card-head"><span class="live-card-pulse"></span><span class="live-card-title">⚔ Parry-Haste</span><span class="live-card-count">${parryList.reduce((s, p) => s + p.count, 0)}</span></header>`;
+        html += '<ul class="card-rows">';
+        for (const p of parryList) {
+          const css = classCssFromType(p.type);
+          html += `<li class="card-row is-slacker"><span class="card-row-name ${css}">${renderPlayerName(p.name)}</span><span class="card-row-body"><strong>${p.count}×</strong></span></li>`;
+        }
+        html += '</ul>';
+        html += '</section>';
+      }
+
       html += '</div>'; // end live-cards-grid
 
       // === Fight-Analyse Section (Wipe oder Kill) ===
@@ -5529,6 +5548,42 @@
   }
 
   // Report-Tab Wipe-Analyse: wiederverwendet die Renderer aus dem Admin-Wipes-Tab
+  function renderParriesSection(parriesData) {
+    const host = $('#wipes-results');
+    if (!host) return;
+    // Aggregate per player across all fights, separate per fight rows
+    const perPlayer = new Map();
+    const fightsWithParries = [];
+    for (const f of parriesData) {
+      if (!f.parries || !f.parries.length) continue;
+      fightsWithParries.push(f);
+      for (const p of f.parries) {
+        const cur = perPlayer.get(p.name) || { name: p.name, type: p.type, total: 0, fights: 0 };
+        cur.total += p.count;
+        cur.fights++;
+        perPlayer.set(p.name, cur);
+      }
+    }
+    if (!perPlayer.size) return;
+    const sorted = [...perPlayer.values()].sort((a, b) => b.total - a.total);
+    let html = '<details class="parries-section" open style="margin-top:24px"><summary><strong>⚔ Parry-Haste-Meister</strong> <small class="text-muted">— non-Tanks die Boss-Melee parried haben (snapshottet Swing-Timer)</small></summary>';
+    html += '<table class="results-table" style="margin-top:12px"><thead><tr><th>Spieler</th><th>Σ Parries</th><th>Auf wie vielen Fights</th></tr></thead><tbody>';
+    for (const p of sorted) {
+      const css = classCssFromType(p.type);
+      html += `<tr><td><span class="${css}">${renderPlayerName(p.name)}</span></td><td><strong>${p.total}</strong></td><td>${p.fights}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    html += '<h4 style="margin-top:18px">Pro Fight</h4>';
+    html += '<table class="results-table"><thead><tr><th>Boss</th><th>Result</th><th>Parry-Sünder</th></tr></thead><tbody>';
+    for (const f of fightsWithParries) {
+      const cells = f.parries.map(p => `<span class="${classCssFromType(p.type)}">${renderPlayerName(p.name)}</span> <strong>${p.count}×</strong>`).join(', ');
+      const badge = f.kill ? '<span class="kill-badge">Kill</span>' : '<span class="wipe-badge">Wipe</span>';
+      html += `<tr><td>${escapeHtml(f.fightName)}</td><td>${badge}</td><td>${cells}</td></tr>`;
+    }
+    html += '</tbody></table></details>';
+    host.insertAdjacentHTML('beforeend', html);
+  }
+
   function renderReportWipes(wipes, reportData) {
     const host = $('#wipes-results');
     if (!wipes || !wipes.length) {

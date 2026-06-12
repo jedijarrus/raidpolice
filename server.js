@@ -2818,6 +2818,7 @@ server.listen(PORT, () => {
               trinketSlackers: result.trinketSlackers || [],
               cdUsage: result.cdUsage || [],
               cdSlackers: result.cdSlackers || [],
+              parries: result.parries || [],
               totalPlayers: result.totalPlayers,
               analyzedAt: Date.now(),
             });
