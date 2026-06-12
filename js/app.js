@@ -8063,27 +8063,20 @@
     }
 
     container.innerHTML = '<p class="text-muted">Lade Statistiken...</p>';
-    setStatus(statusId, `Lade Daten fuer ${reports25.length} Reports...`);
+    setStatus(statusId, 'Lade Stats-Bundle...');
 
-    // Fetch all report bundles
-    const bundles = [];
-    let loaded = 0;
-    const batchSize = 5;
-    for (let i = 0; i < reports25.length; i += batchSize) {
-      const batch = reports25.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(async r => {
-        try {
-          const resp = await apiFetch(`/api/report/${r.id}`);
-          if (resp.ok) return await resp.json();
-        } catch (e) { /* skip */ }
-        return null;
-      }));
-      for (let j = 0; j < results.length; j++) {
-        if (results[j]) bundles.push({ report: reports25[i + j], bundle: results[j] });
+    // Stats-Bundle in einem Call — server-side cached + invalidiert bei neuer Analyse
+    let bundles = [];
+    try {
+      const resp = await apiFetch('/api/stats/bundle');
+      if (resp.ok) {
+        const j = await resp.json();
+        bundles = j.bundles || [];
+        // Filter wie reports25 (25er, dedupe per Tag+Zone)
+        const wantIds = new Set(reports25.map(r => r.id));
+        bundles = bundles.filter(b => wantIds.has(b.report.id));
       }
-      loaded += batch.length;
-      setStatus(statusId, `Lade Daten... ${loaded}/${reports25.length} Reports`);
-    }
+    } catch (e) { console.warn('stats bundle fetch:', e); }
 
     if (!bundles.length) {
       container.innerHTML = '<p class="text-muted">Keine analysierten Reports gefunden.</p>';
@@ -8132,6 +8125,45 @@
           pd.fightDeaths.push({ date, fightName: fight.fightName, kill: fight.kill, deaths: d.deaths });
         }
       }
+    }
+
+    // ── Death-Causes aggregieren: (fightName, abilityName, playerName) → count ──
+    const deathCauseAgg = new Map(); // key: fightName|abilityName → { fightName, abilityName, abilityGuid, victims: {player: count} }
+    for (const { bundle } of bundles) {
+      const deaths = bundle.analysis && bundle.analysis.deaths;
+      if (!deaths || !deaths.length) continue;
+      const fightIds25 = get25FightIds(bundle);
+      const playerTypeMap = new Map();
+      for (const fight of deaths) {
+        for (const d of (fight.deaths || [])) if (d.type) playerTypeMap.set(d.name, d.type);
+      }
+      for (const fight of deaths) {
+        if (fight.fightId && !fightIds25.has(fight.fightId)) continue;
+        for (const c of (fight.causes || [])) {
+          const key = fight.fightName + '|' + c.abilityName;
+          if (!deathCauseAgg.has(key)) deathCauseAgg.set(key, { fightName: fight.fightName, abilityName: c.abilityName, abilityGuid: c.abilityGuid, victims: {}, types: {} });
+          const agg = deathCauseAgg.get(key);
+          for (const [name, n] of Object.entries(c.victims || {})) {
+            if (statsExcluded.has(name)) continue;
+            agg.victims[name] = (agg.victims[name] || 0) + n;
+            if (playerTypeMap.get(name)) agg.types[name] = playerTypeMap.get(name);
+          }
+        }
+      }
+    }
+
+    // Cata-Bolt auf Karathress als Tabelle
+    const cataKey = 'Fathom-Lord Karathress|Cataclysmic Bolt';
+    const cataAgg = deathCauseAgg.get(cataKey);
+    if (cataAgg) {
+      const victimsSorted = Object.entries(cataAgg.victims).sort((a, b) => b[1] - a[1]);
+      groups.survival.push(statsTable('☠️ Cataclysmic Bolt (Karathress) — Random-Target-Tode', ['#', 'Spieler', 'Tode'],
+        victimsSorted.map(([name, count], i) => {
+          const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
+          const css = classCssFromType(cataAgg.types[name] || '');
+          return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(name)}</span></td><td><strong>${count}</strong></td>`;
+        })
+      ));
     }
 
     // ── Aggregate consumables across all reports ──
@@ -8365,6 +8397,26 @@
         phxSorted.map(([name, info], i) => {
           const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
           return `<td${medal}>${i + 1}</td><td>${phxName(name, info.cls)}</td><td><strong>${info.count}</strong></td>`;
+        })
+      ));
+    }
+
+    // 🧽 Loot-Schwamm — Top-Loot-Empfänger pro Spieler (Mainspec separat von Offspec)
+    const lootByPlayer = new Map(); // name → { cls, main, off }
+    for (const l of ((window._tmbLoot && window._tmbLoot.loot) || [])) {
+      if (!l.character || statsExcluded.has(l.character)) continue;
+      const ex = lootByPlayer.get(l.character) || { cls: l.class || '', main: 0, off: 0 };
+      if (l.class) ex.cls = l.class;
+      if (l.offspec) ex.off++; else ex.main++;
+      lootByPlayer.set(l.character, ex);
+    }
+    const lootSorted = [...lootByPlayer.entries()].sort((a, b) => (b[1].main + b[1].off) - (a[1].main + a[1].off));
+    if (lootSorted.length) {
+      groups.shame.push(statsTable('Loot-Schwamm', ['#', 'Spieler', 'Mainspec', 'Offspec', 'Gesamt'],
+        lootSorted.slice(0, 15).map(([name, info], i) => {
+          const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
+          const css = classCssFromType(info.cls);
+          return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(name)}</span></td><td>${info.main}</td><td>${info.off}</td><td><strong>${info.main + info.off}</strong></td>`;
         })
       ));
     }

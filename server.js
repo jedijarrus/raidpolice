@@ -2360,6 +2360,45 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // ─── Stats Bundle (cached) — alle Bundles für die Statistik-Seite in einem Call ───
+  if (parsed.pathname === '/api/stats/bundle' && req.method === 'GET') {
+    const VIEW_KEY = 'stats_bundle';
+    const cached = cache.getComputedView(VIEW_KEY);
+    if (cached) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'X-Cache': 'HIT', ...SECURITY_HEADERS });
+      res.end(cached.data_json);
+      return;
+    }
+    try {
+      const guildName = cache.getSetting('guildName');
+      const serverName = cache.getSetting('serverName');
+      const region = cache.getSetting('region') || cache.getSetting('serverRegion');
+      const guildKey = guildName && serverName && region ? `${guildName}/${serverName}/${region}` : null;
+      const grCache = guildKey ? cache.getGuildReportsCache(guildKey) : null;
+      const allReports = grCache ? JSON.parse(grCache.reports_json) : [];
+      const excluded = new Set(cache.getExcludedReports());
+      const startDateStr = cache.getSetting('reportStartDate');
+      const startTs = startDateStr ? new Date(startDateStr + 'T00:00:00').getTime() : 0;
+      // Nur 25er TBC Reports, nicht excluded, nach startTs
+      const filtered = allReports.filter(r => !excluded.has(r.id) && (!startTs || r.start >= startTs));
+      // Bundles pro Report (nur die mit report_data drin)
+      const bundles = [];
+      for (const r of filtered) {
+        const b = cache.getReportBundle(r.id);
+        if (b) bundles.push({ report: r, bundle: b });
+      }
+      const payload = { bundles, computedAt: Date.now() };
+      cache.putComputedView(VIEW_KEY, JSON.stringify(payload));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'X-Cache': 'MISS', ...SECURITY_HEADERS });
+      res.end(JSON.stringify(payload));
+    } catch (e) {
+      console.error('[STATS] bundle error:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
   // ─── Bug Tracker API (admin-only) ───
   if (parsed.pathname === '/api/bugs' && req.method === 'GET') {
     if (!validateSession(req)) { res.writeHead(401, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }); res.end(JSON.stringify({ error: 'Nicht autorisiert' })); return; }

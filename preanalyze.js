@@ -1498,14 +1498,24 @@ async function analyzeDeaths(reportCode, bossFights) {
     const resp = await wclApi(`/report/tables/deaths/${reportCode}`, {
       start: f.start_time, end: f.end_time
     }).catch(() => ({ entries: [] }));
-    // Each entry in deaths table is a single death event — group by player
     const playerDeaths = new Map();
+    // Killing-Blow-Aggregation pro (ability, player)
+    const causeMap = new Map(); // abilityName -> { abilityName, abilityGuid, victims: {player: count} }
     for (const e of (resp.entries || [])) {
       if (!e.name || !isValidClass(e.type)) continue;
       if (!playerDeaths.has(e.name)) playerDeaths.set(e.name, { name: e.name, id: e.id, type: e.type, deaths: 0 });
       playerDeaths.get(e.name).deaths++;
+      const ab = e.killingBlow || {};
+      const abName = ab.name || 'Unknown';
+      if (!causeMap.has(abName)) causeMap.set(abName, { abilityName: abName, abilityGuid: ab.guid || 0, victims: {} });
+      const c = causeMap.get(abName);
+      c.victims[e.name] = (c.victims[e.name] || 0) + 1;
     }
-    results.push({ fightId: f.id, fightName: f.name, kill: f.kill, deaths: [...playerDeaths.values()] });
+    results.push({
+      fightId: f.id, fightName: f.name, kill: f.kill,
+      deaths: [...playerDeaths.values()],
+      causes: [...causeMap.values()],
+    });
   }
   return results;
 }
@@ -3328,6 +3338,7 @@ async function processReport(reportCode) {
 
   // Invalidate aggregated views that depend on this report's analysis
   try { require('./progression').invalidate(); } catch (_) {}
+  try { cache.invalidateComputedView('stats_bundle'); } catch (_) {}
 
   return true;
 }
