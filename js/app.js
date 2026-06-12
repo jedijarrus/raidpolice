@@ -8096,8 +8096,9 @@
     // Excluded players — filter from all stats
     const statsExcluded = window._excludedPlayerSet || new Set();
 
-    // statsTable helper hochgezogen — Phoenix/Loot/Karma-Tabs werden früher gebaut als
-    // die alte Position weiter unten erlaubte (TDZ-Crash sonst).
+    // statsTable helper + groups hochgezogen — Phoenix/Loot/Karma-Tabs werden früher
+    // gebaut als die alte Position weiter unten erlaubte (TDZ-Crash sonst).
+    const groups = { shame: [], performance: [], survival: [], consumes: [], bosses: [] };
     const fmtK = n => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(0) + 'k' : String(n);
     let statsTableId = 0;
     function statsTable(title, headers, rows, topN = 5) {
@@ -8371,7 +8372,7 @@
     }
 
     // ── Render: Statistik nach Gruppen organisiert ──
-    const groups = { shame: [], performance: [], survival: [], consumes: [], bosses: [] };
+    // (groups oben deklariert)
 
     // 🏆 Hall of Shame — Ashes of Al'ar Empfänger live aus TMB-Loot.
     // Spielernamen-Aliase kommen aus der instanz-spezifischen Branding-Config
