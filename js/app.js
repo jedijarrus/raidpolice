@@ -8250,13 +8250,14 @@
     }
     const verwirrtSorted = [...verwirrtByPlayer.values()].sort((a, b) => b.total - a.total);
     if (verwirrtSorted.length) {
-      groups.shame.push(statsTable('🤡 Die Verwirrten', ['#', 'Spieler', 'Parries'],
+      const verwirrtTable = statsTable('🤡 Die Verwirrten', ['#', 'Spieler', 'Parries'],
         verwirrtSorted.map((p, i) => {
           const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
           const css = classCssFromType(p.type);
           return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(p.name)}</span></td><td><strong>${p.total}</strong></td>`;
         })
-      ));
+      );
+      groups.shame.push(verwirrtTable.replace('</h4>', `</h4><p class="text-muted" style="margin-top:-8px;margin-bottom:8px;font-size:0.78rem">Wer ist zu dumm hinter dem Boss zu stehen?</p>`));
     }
 
     // Lowest Karma — Cataclysmic Bolt auf Karathress (random target, also reine Karma-Frage)
