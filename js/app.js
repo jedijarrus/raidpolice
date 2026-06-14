@@ -8122,15 +8122,17 @@
     return d.getFullYear() * 100 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7) + 1;
   }
 
-  function renderStatsInstanceToggle(weekMin, weekMax) {
+  function renderStatsInstanceToggle(weeksSorted) {
     const host = $('#stats-instance-toggle');
     if (!host) return;
     const sel = window._statsInstances || new Set(INSTANCE_LIST);
     window._statsInstances = sel;
-    const wkStart = window._statsWeekStart ?? weekMin;
-    const wkEnd = window._statsWeekEnd ?? weekMax;
-    window._statsWeekStart = wkStart;
-    window._statsWeekEnd = wkEnd;
+    const idxMax = weeksSorted.length - 1;
+    const wkStartIdx = window._statsWeekStartIdx ?? 0;
+    const wkEndIdx = window._statsWeekEndIdx ?? idxMax;
+    window._statsWeekStartIdx = wkStartIdx;
+    window._statsWeekEndIdx = wkEndIdx;
+    window._statsWeeksList = weeksSorted;
     let html = '<div class="stats-toggle-row"><strong>Instanz:</strong> ';
     for (const inst of INSTANCE_LIST) {
       const on = sel.has(inst);
@@ -8138,12 +8140,13 @@
     }
     const allOn = INSTANCE_LIST.every(i => sel.has(i));
     html += `<button class="stats-pill${allOn ? ' is-on' : ''}" data-stats-inst="ALL">Alle</button></div>`;
-    if (weekMin !== null && weekMax !== null && weekMin !== weekMax) {
-      html += `<div class="stats-toggle-row"><strong>Wochen:</strong> `;
-      html += `<input type="range" id="stats-week-start" min="${weekMin}" max="${weekMax}" value="${wkStart}" style="flex:1;max-width:200px">`;
+    function fmtKw(v) { const yr = Math.floor(v / 100); const wk = v % 100; return `KW ${wk}/${yr}`; }
+    if (idxMax >= 1) {
+      html += `<div class="stats-toggle-row"><strong>Zeitraum:</strong> `;
+      html += `<input type="range" id="stats-week-start" min="0" max="${idxMax}" value="${wkStartIdx}" step="1" style="flex:1;max-width:200px">`;
       html += `<span class="text-muted" style="font-size:0.78rem">bis</span>`;
-      html += `<input type="range" id="stats-week-end" min="${weekMin}" max="${weekMax}" value="${wkEnd}" style="flex:1;max-width:200px">`;
-      html += `<span id="stats-week-label" class="text-muted" style="font-size:0.78rem">${wkStart} – ${wkEnd}</span></div>`;
+      html += `<input type="range" id="stats-week-end" min="0" max="${idxMax}" value="${wkEndIdx}" step="1" style="flex:1;max-width:200px">`;
+      html += `<span id="stats-week-label" class="text-muted" style="font-size:0.78rem">${fmtKw(weeksSorted[wkStartIdx])} – ${fmtKw(weeksSorted[wkEndIdx])}</span></div>`;
     }
     host.innerHTML = html;
     host.querySelectorAll('[data-stats-inst]').forEach(btn => {
@@ -8161,15 +8164,15 @@
     });
     const wsEl = $('#stats-week-start'), weEl = $('#stats-week-end');
     if (wsEl && weEl) {
-      const update = () => {
+      const update = (src) => {
         let s = +wsEl.value, e = +weEl.value;
-        if (s > e) { if (this === wsEl) e = s; else s = e; }
-        window._statsWeekStart = s;
-        window._statsWeekEnd = e;
-        $('#stats-week-label').textContent = s + ' – ' + e;
+        if (s > e) { if (src === 'start') e = s; else s = e; wsEl.value = s; weEl.value = e; }
+        window._statsWeekStartIdx = s;
+        window._statsWeekEndIdx = e;
+        $('#stats-week-label').textContent = fmtKw(weeksSorted[s]) + ' – ' + fmtKw(weeksSorted[e]);
       };
-      wsEl.addEventListener('input', update);
-      weEl.addEventListener('input', update);
+      wsEl.addEventListener('input', () => update('start'));
+      weEl.addEventListener('input', () => update('end'));
       wsEl.addEventListener('change', () => { window._statsLoaded = false; loadAndRenderStats(); });
       weEl.addEventListener('change', () => { window._statsLoaded = false; loadAndRenderStats(); });
     }
@@ -8177,13 +8180,15 @@
 
   function isStatsFightAllowed(fightName, reportStart) {
     const inst = BOSS_TO_INSTANCE[fightName];
-    if (!inst) return true; // unknown boss → keep
+    if (!inst) return true;
     const sel = window._statsInstances || new Set(INSTANCE_LIST);
     if (!sel.has(inst)) return false;
-    const wk = isoWeekOf(reportStart);
-    const ws = window._statsWeekStart, we = window._statsWeekEnd;
-    if (ws != null && we != null) {
-      if (wk < ws || wk > we) return false;
+    const weeks = window._statsWeeksList;
+    const sIdx = window._statsWeekStartIdx, eIdx = window._statsWeekEndIdx;
+    if (weeks && sIdx != null && eIdx != null) {
+      const wk = isoWeekOf(reportStart);
+      const idx = weeks.indexOf(wk);
+      if (idx < 0 || idx < sIdx || idx > eIdx) return false;
     }
     return true;
   }
@@ -8239,14 +8244,11 @@
       hide(statusId);
       return;
     }
-    // Wochen-Range bestimmen + Toggle rendern
-    let weekMin = null, weekMax = null;
-    for (const { report } of bundles) {
-      const w = isoWeekOf(report.start);
-      if (weekMin === null || w < weekMin) weekMin = w;
-      if (weekMax === null || w > weekMax) weekMax = w;
-    }
-    renderStatsInstanceToggle(weekMin, weekMax);
+    // Tatsächlich vorhandene Raid-Wochen sortieren (lückenlose Slider-Indizes)
+    const weekSet = new Set();
+    for (const { report } of bundles) weekSet.add(isoWeekOf(report.start));
+    const weeksSorted = [...weekSet].sort((a, b) => a - b);
+    renderStatsInstanceToggle(weeksSorted);
 
     // Build set of 25-man fight IDs per bundle (filter out 10-man fights like Karazhan)
     function get25FightIds(bundle) {
