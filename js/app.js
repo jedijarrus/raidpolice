@@ -8104,21 +8104,94 @@
 
   // ─── STATISTIK TAB ───
 
+  // Boss → Instanz für Stats-Filter
+  const BOSS_TO_INSTANCE = {
+    'Hydross the Unstable': 'SSC', 'The Lurker Below': 'SSC', 'Morogrim Tidewalker': 'SSC',
+    'Fathom-Lord Karathress': 'SSC', 'Leotheras the Blind': 'SSC', 'Lady Vashj': 'SSC',
+    "Al'ar": 'TK', 'Void Reaver': 'TK', 'High Astromancer Solarian': 'TK', "Kael'thas Sunstrider": 'TK',
+    'High King Maulgar': 'Gruul', 'Gruul the Dragonkiller': 'Gruul',
+    'Magtheridon': 'Mag',
+  };
+  const INSTANCE_LIST = ['SSC', 'TK', 'Gruul', 'Mag'];
+
+  function isoWeekOf(ts) {
+    const d = new Date(ts);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const w1 = new Date(d.getFullYear(), 0, 4);
+    return d.getFullYear() * 100 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7) + 1;
+  }
+
+  function renderStatsInstanceToggle(weekMin, weekMax) {
+    const host = $('#stats-instance-toggle');
+    if (!host) return;
+    const sel = window._statsInstances || new Set(INSTANCE_LIST);
+    window._statsInstances = sel;
+    const wkStart = window._statsWeekStart ?? weekMin;
+    const wkEnd = window._statsWeekEnd ?? weekMax;
+    window._statsWeekStart = wkStart;
+    window._statsWeekEnd = wkEnd;
+    let html = '<div class="stats-toggle-row"><strong>Instanz:</strong> ';
+    for (const inst of INSTANCE_LIST) {
+      const on = sel.has(inst);
+      html += `<button class="stats-pill${on ? ' is-on' : ''}" data-stats-inst="${inst}">${inst}</button>`;
+    }
+    const allOn = INSTANCE_LIST.every(i => sel.has(i));
+    html += `<button class="stats-pill${allOn ? ' is-on' : ''}" data-stats-inst="ALL">Alle</button></div>`;
+    if (weekMin !== null && weekMax !== null && weekMin !== weekMax) {
+      html += `<div class="stats-toggle-row"><strong>Wochen:</strong> `;
+      html += `<input type="range" id="stats-week-start" min="${weekMin}" max="${weekMax}" value="${wkStart}" style="flex:1;max-width:200px">`;
+      html += `<span class="text-muted" style="font-size:0.78rem">bis</span>`;
+      html += `<input type="range" id="stats-week-end" min="${weekMin}" max="${weekMax}" value="${wkEnd}" style="flex:1;max-width:200px">`;
+      html += `<span id="stats-week-label" class="text-muted" style="font-size:0.78rem">${wkStart} – ${wkEnd}</span></div>`;
+    }
+    host.innerHTML = html;
+    host.querySelectorAll('[data-stats-inst]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const inst = btn.dataset.statsInst;
+        if (inst === 'ALL') {
+          if (INSTANCE_LIST.every(i => sel.has(i))) sel.clear();
+          else INSTANCE_LIST.forEach(i => sel.add(i));
+        } else {
+          if (sel.has(inst)) sel.delete(inst); else sel.add(inst);
+        }
+        window._statsLoaded = false;
+        loadAndRenderStats();
+      });
+    });
+    const wsEl = $('#stats-week-start'), weEl = $('#stats-week-end');
+    if (wsEl && weEl) {
+      const update = () => {
+        let s = +wsEl.value, e = +weEl.value;
+        if (s > e) { if (this === wsEl) e = s; else s = e; }
+        window._statsWeekStart = s;
+        window._statsWeekEnd = e;
+        $('#stats-week-label').textContent = s + ' – ' + e;
+      };
+      wsEl.addEventListener('input', update);
+      weEl.addEventListener('input', update);
+      wsEl.addEventListener('change', () => { window._statsLoaded = false; loadAndRenderStats(); });
+      weEl.addEventListener('change', () => { window._statsLoaded = false; loadAndRenderStats(); });
+    }
+  }
+
+  function isStatsFightAllowed(fightName, reportStart) {
+    const inst = BOSS_TO_INSTANCE[fightName];
+    if (!inst) return true; // unknown boss → keep
+    const sel = window._statsInstances || new Set(INSTANCE_LIST);
+    if (!sel.has(inst)) return false;
+    const wk = isoWeekOf(reportStart);
+    const ws = window._statsWeekStart, we = window._statsWeekEnd;
+    if (ws != null && we != null) {
+      if (wk < ws || wk > we) return false;
+    }
+    return true;
+  }
+
   async function loadAndRenderStats() {
     const container = $('#stats-results');
     const statusId = '#stats-status';
     if (!guildReports.length) { container.innerHTML = '<p class="text-muted">Keine Reports verfuegbar.</p>'; return; }
-    // Filter-Toggle wire-up (einmal)
-    const lurkerCb = $('#stats-exclude-lurker');
-    if (lurkerCb && !lurkerCb._wired) {
-      lurkerCb._wired = true;
-      lurkerCb.checked = !!window._statsExcludeLurker;
-      lurkerCb.addEventListener('change', () => {
-        window._statsExcludeLurker = lurkerCb.checked;
-        window._statsLoaded = false;
-        loadAndRenderStats();
-      });
-    }
     const excludedFightNames = new Set();
     if (window._statsExcludeLurker) excludedFightNames.add('The Lurker Below');
 
@@ -8166,6 +8239,14 @@
       hide(statusId);
       return;
     }
+    // Wochen-Range bestimmen + Toggle rendern
+    let weekMin = null, weekMax = null;
+    for (const { report } of bundles) {
+      const w = isoWeekOf(report.start);
+      if (weekMin === null || w < weekMin) weekMin = w;
+      if (weekMax === null || w > weekMax) weekMax = w;
+    }
+    renderStatsInstanceToggle(weekMin, weekMax);
 
     // Build set of 25-man fight IDs per bundle (filter out 10-man fights like Karazhan)
     function get25FightIds(bundle) {
@@ -8214,6 +8295,7 @@
       const date = CLA_DATA.formatDate ? CLA_DATA.formatDate(report.start) : new Date(report.start).toLocaleDateString('de-DE');
       for (const fight of deaths) {
         if (fight.fightId && !fightIds25.has(fight.fightId)) continue;
+        if (!isStatsFightAllowed(fight.fightName, report.start)) continue;
         // Per-boss aggregation
         if (!deathsByFight.has(fight.fightName)) deathsByFight.set(fight.fightName, { totalDeaths: 0, wipeDeaths: 0, killDeaths: 0, count: 0 });
         const bf = deathsByFight.get(fight.fightName);
@@ -8234,7 +8316,7 @@
 
     // ── Death-Causes aggregieren: (fightName, abilityName, playerName) → count ──
     const deathCauseAgg = new Map(); // key: fightName|abilityName → { fightName, abilityName, abilityGuid, victims: {player: count} }
-    for (const { bundle } of bundles) {
+    for (const { report, bundle } of bundles) {
       const deaths = bundle.analysis && bundle.analysis.deaths;
       if (!deaths || !deaths.length) continue;
       const fightIds25 = get25FightIds(bundle);
@@ -8244,6 +8326,7 @@
       }
       for (const fight of deaths) {
         if (fight.fightId && !fightIds25.has(fight.fightId)) continue;
+        if (!isStatsFightAllowed(fight.fightName, report.start)) continue;
         for (const c of (fight.causes || [])) {
           const key = fight.fightName + '|' + c.abilityName;
           if (!deathCauseAgg.has(key)) deathCauseAgg.set(key, { fightName: fight.fightName, abilityName: c.abilityName, abilityGuid: c.abilityGuid, victims: {}, types: {} });
@@ -8259,11 +8342,12 @@
 
     // 🤡 Die Verwirrten — non-tank parries, ausklappbar pro Boss
     const verwirrtByPlayer = new Map();
-    for (const { bundle } of bundles) {
+    for (const { report, bundle } of bundles) {
       const parries = bundle.analysis && bundle.analysis.parries;
       if (!parries || !parries.length) continue;
       for (const f of parries) {
         if (excludedFightNames.has(f.fightName)) continue;
+        if (!isStatsFightAllowed(f.fightName, report.start)) continue;
         for (const p of (f.parries || [])) {
           if (statsExcluded.has(p.name)) continue;
           const cur = verwirrtByPlayer.get(p.name) || { name: p.name, type: p.type, total: 0, perBoss: new Map() };
@@ -8275,8 +8359,10 @@
     }
     const verwirrtSorted = [...verwirrtByPlayer.values()].sort((a, b) => b.total - a.total);
     if (verwirrtSorted.length) {
+      const lurkerChecked = window._statsExcludeLurker ? ' checked' : '';
       let tableHtml = `<div class="stats-section"><h4 class="stats-subtitle">🤡 Die Verwirrten</h4>`;
-      tableHtml += `<p class="text-muted" style="margin-top:-8px;margin-bottom:8px;font-size:0.78rem">Wer ist zu dumm hinter dem Boss zu stehen?</p>`;
+      tableHtml += `<p class="text-muted" style="margin-top:-8px;margin-bottom:6px;font-size:0.78rem">Wer ist zu dumm hinter dem Boss zu stehen?</p>`;
+      tableHtml += `<label class="inline-check" style="font-size:0.78rem;margin-bottom:8px;display:inline-block"><input type="checkbox" id="stats-exclude-lurker"${lurkerChecked}> Lurker Below ausblenden</label>`;
       tableHtml += '<table class="results-table stats-table"><thead><tr><th>#</th><th>Spieler</th><th>Parries</th></tr></thead><tbody>';
       verwirrtSorted.forEach((p, i) => {
         const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
@@ -8350,12 +8436,13 @@
     const dmgByPlayer = new Map(); // name -> { type, totalDmg, totalDuration, fightCount, bestDps, bestDpsFight }
     const healByPlayer = new Map(); // name -> { type, totalHeal, totalDuration, fightCount, bestHps, bestHpsFight }
 
-    for (const { bundle } of bundles) {
+    for (const { report, bundle } of bundles) {
       const dh = bundle.analysis && bundle.analysis.dmgheal;
       if (!dh || !dh.length) continue;
       const fightIds25 = get25FightIds(bundle);
       for (const fight of dh) {
         if (fight.fightId && !fightIds25.has(fight.fightId)) continue;
+        if (!isStatsFightAllowed(fight.fightName, report.start)) continue;
         for (const d of (fight.damage || [])) {
           if (!d.total || statsExcluded.has(d.name)) continue;
           if (!dmgByPlayer.has(d.name)) dmgByPlayer.set(d.name, { type: d.type, totalDmg: 0, totalDuration: 0, fightCount: 0, bestDps: 0, bestDpsFight: '' });
@@ -8381,12 +8468,13 @@
     const dmgTakenByPlayer = new Map(); // name -> { type, totalDmgTaken, fightCount, tankFights, totalFights }
     const healReceivedByPlayer = new Map(); // name -> { type, totalHealReceived, fightCount, tankFights, totalFights }
 
-    for (const { bundle } of bundles) {
+    for (const { report, bundle } of bundles) {
       const dt = bundle.analysis && bundle.analysis.damagetaken;
       if (!dt || !dt.length) continue;
       const fightIds25 = get25FightIds(bundle);
       for (const fight of dt) {
         if (fight.fightId && !fightIds25.has(fight.fightId)) continue;
+        if (!isStatsFightAllowed(fight.fightName, report.start)) continue;
         for (const e of (fight.entries || [])) {
           if (!e.total || statsExcluded.has(e.name)) continue;
           if (!dmgTakenByPlayer.has(e.name)) dmgTakenByPlayer.set(e.name, { type: e.type, totalDmgTaken: 0, fightCount: 0, tankFights: 0, totalFights: 0 });
@@ -8411,12 +8499,13 @@
     // ── Aggregate drums across all reports ──
     const drumsByPlayer = new Map(); // name -> { type, totalDrums, fightCount }
 
-    for (const { bundle } of bundles) {
+    for (const { report, bundle } of bundles) {
       const dr = bundle.analysis && bundle.analysis.drums;
       if (!dr || !dr.length) continue;
       const fightIds25 = get25FightIds(bundle);
       for (const fight of dr) {
         if (fight.fightId && !fightIds25.has(fight.fightId)) continue;
+        if (!isStatsFightAllowed(fight.fightName, report.start)) continue;
         for (const d of (fight.drums || [])) {
           if (!d.count || statsExcluded.has(d.name)) continue;
           if (!drumsByPlayer.has(d.name)) drumsByPlayer.set(d.name, { type: d.type, totalDrums: 0, fightCount: 0 });
@@ -8808,6 +8897,15 @@
         btn.innerHTML = hidden ? `Top 5 anzeigen &#9650;` : `Alle ${rows.length + 5} anzeigen &#9660;`;
       });
     });
+    // Wire Lurker-Toggle innerhalb der Verwirrten-Section
+    const lurkerCb = container.querySelector('#stats-exclude-lurker');
+    if (lurkerCb) {
+      lurkerCb.addEventListener('change', () => {
+        window._statsExcludeLurker = lurkerCb.checked;
+        window._statsLoaded = false;
+        loadAndRenderStats();
+      });
+    }
     // Wire Verwirrte expand-summary rows
     container.querySelectorAll('.verwirrt-summary').forEach(row => {
       row.addEventListener('click', () => {

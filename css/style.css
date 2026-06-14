@@ -2602,6 +2602,22 @@ body.girly-mode .butterfly { opacity: 0.9; }
   margin: 8px 0 0;
 }
 
+.stats-instance-toggle { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.stats-toggle-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.82rem; }
+.stats-pill {
+  padding: 5px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.stats-pill:hover { background: var(--bg-hover); }
+.stats-pill.is-on { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
 .cd-not-expected {
   display: inline-block;
   margin-left: 6px;
