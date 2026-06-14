@@ -8108,6 +8108,19 @@
     const container = $('#stats-results');
     const statusId = '#stats-status';
     if (!guildReports.length) { container.innerHTML = '<p class="text-muted">Keine Reports verfuegbar.</p>'; return; }
+    // Filter-Toggle wire-up (einmal)
+    const lurkerCb = $('#stats-exclude-lurker');
+    if (lurkerCb && !lurkerCb._wired) {
+      lurkerCb._wired = true;
+      lurkerCb.checked = !!window._statsExcludeLurker;
+      lurkerCb.addEventListener('change', () => {
+        window._statsExcludeLurker = lurkerCb.checked;
+        window._statsLoaded = false;
+        loadAndRenderStats();
+      });
+    }
+    const excludedFightNames = new Set();
+    if (window._statsExcludeLurker) excludedFightNames.add('The Lurker Below');
 
     // Filter 25-man TBC reports (exclude excluded reports)
     const reports25raw = guildReports
@@ -8244,30 +8257,43 @@
       }
     }
 
-    // 🤡 Die Verwirrten — non-tank Parries gegen Bosse (Parry-Haste-Verursacher)
+    // 🤡 Die Verwirrten — non-tank parries, ausklappbar pro Boss
     const verwirrtByPlayer = new Map();
     for (const { bundle } of bundles) {
       const parries = bundle.analysis && bundle.analysis.parries;
       if (!parries || !parries.length) continue;
       for (const f of parries) {
+        if (excludedFightNames.has(f.fightName)) continue;
         for (const p of (f.parries || [])) {
           if (statsExcluded.has(p.name)) continue;
-          const cur = verwirrtByPlayer.get(p.name) || { name: p.name, type: p.type, total: 0 };
+          const cur = verwirrtByPlayer.get(p.name) || { name: p.name, type: p.type, total: 0, perBoss: new Map() };
           cur.total += p.count;
+          cur.perBoss.set(f.fightName, (cur.perBoss.get(f.fightName) || 0) + p.count);
           verwirrtByPlayer.set(p.name, cur);
         }
       }
     }
     const verwirrtSorted = [...verwirrtByPlayer.values()].sort((a, b) => b.total - a.total);
     if (verwirrtSorted.length) {
-      const verwirrtTable = statsTable('🤡 Die Verwirrten', ['#', 'Spieler', 'Parries'],
-        verwirrtSorted.map((p, i) => {
-          const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
-          const css = classCssFromType(p.type);
-          return `<td${medal}>${i + 1}</td><td><span class="${css}">${renderPlayerName(p.name)}</span></td><td><strong>${p.total}</strong></td>`;
-        })
-      );
-      groups.shame.push(verwirrtTable.replace('</h4>', `</h4><p class="text-muted" style="margin-top:-8px;margin-bottom:8px;font-size:0.78rem">Wer ist zu dumm hinter dem Boss zu stehen?</p>`));
+      let tableHtml = `<div class="stats-section"><h4 class="stats-subtitle">🤡 Die Verwirrten</h4>`;
+      tableHtml += `<p class="text-muted" style="margin-top:-8px;margin-bottom:8px;font-size:0.78rem">Wer ist zu dumm hinter dem Boss zu stehen?</p>`;
+      tableHtml += '<table class="results-table stats-table"><thead><tr><th>#</th><th>Spieler</th><th>Parries</th></tr></thead><tbody>';
+      verwirrtSorted.forEach((p, i) => {
+        const medal = i < 3 ? ` class="stats-medal-${i + 1}"` : '';
+        const css = classCssFromType(p.type);
+        const detailId = 'verwirrt-d-' + i;
+        const summaryHidden = i >= 5 ? ' stats-hidden-row verwirrt-row hidden' : '';
+        tableHtml += `<tr class="verwirrt-summary${summaryHidden}" data-verwirrt-target="${detailId}" style="cursor:pointer"><td${medal}>${i + 1}</td><td><span class="expand-arrow">&#9654;</span> <span class="${css}">${renderPlayerName(p.name)}</span></td><td><strong>${p.total}</strong></td></tr>`;
+        const bossEntries = [...p.perBoss.entries()].sort((a, b) => b[1] - a[1]);
+        const breakdown = bossEntries.map(([boss, n]) => `<span style="display:inline-block;margin-right:14px"><strong>${n}×</strong> ${escapeHtml(boss)}</span>`).join('');
+        tableHtml += `<tr class="verwirrt-detail hidden" data-verwirrt-id="${detailId}"><td></td><td colspan="2" style="padding-left:24px;color:var(--text-muted);font-size:0.85em">${breakdown}</td></tr>`;
+      });
+      tableHtml += '</tbody></table>';
+      if (verwirrtSorted.length > 5) {
+        tableHtml += `<button class="btn btn-sm stats-expand-btn" data-stats-expand="verwirrt-row">Alle ${verwirrtSorted.length} anzeigen &#9660;</button>`;
+      }
+      tableHtml += '</div>';
+      groups.shame.push(tableHtml);
     }
 
     // Lowest Karma — Cataclysmic Bolt auf Karathress (random target, also reine Karma-Frage)
@@ -8780,6 +8806,17 @@
         const hidden = rows[0]?.classList.contains('hidden');
         rows.forEach(r => r.classList.toggle('hidden', !hidden));
         btn.innerHTML = hidden ? `Top 5 anzeigen &#9650;` : `Alle ${rows.length + 5} anzeigen &#9660;`;
+      });
+    });
+    // Wire Verwirrte expand-summary rows
+    container.querySelectorAll('.verwirrt-summary').forEach(row => {
+      row.addEventListener('click', () => {
+        const target = row.dataset.verwirrtTarget;
+        const detail = container.querySelector(`[data-verwirrt-id="${target}"]`);
+        if (!detail) return;
+        const expanded = detail.classList.toggle('hidden');
+        const arrow = row.querySelector('.expand-arrow');
+        if (arrow) arrow.innerHTML = expanded ? '&#9654;' : '&#9660;';
       });
     });
 

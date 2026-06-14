@@ -120,6 +120,9 @@
       <div class="raid-section">
         <h3 class="section-title">Raid-Statistiken</h3>
         <div id="stats-status" class="status-bar hidden"></div>
+        <div id="stats-filters" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <label class="inline-check"><input type="checkbox" id="stats-exclude-lurker"> Lurker Below aus „Die Verwirrten" ausblenden</label>
+        </div>
         <div id="stats-results"><p class="text-muted">Statistiken werden beim Oeffnen geladen...</p></div>
       </div>
     </div>
@@ -1061,6 +1064,6 @@
   <script src="js/sockets_db.js?v=3"></script>
   <script src="js/spell_ranks.js?v=3"></script>
   <script src="js/api.js?v=4"></script>
-  <script src="js/app.js?v=194"></script>
+  <script src="js/app.js?v=195"></script>
 </body>
 </html>
