@@ -1495,6 +1495,38 @@ async function analyzeDamageHealing(reportCode, bossFights) {
 // Parry-Haste-Tracking: Spieler-Melee-Schwung wird vom Boss geparried → Boss snapshottet
 // Swing-Timer = extra Hit auf den Tank. hitType=8 = parry, ability.guid=1 = Melee,
 // sourceIsFriendly=true = Spieler. Non-tank source verursacht Parry-Haste.
+// Boss-Mechanik-Phasen die parries unvermeidbar/legitim machen — werden aus der
+// Parry-Haste-Wertung rausgefiltert. Schema: fightName-Pattern → enemy-ability-IDs.
+const PARRY_EXCLUDE_PHASES = [
+  { pattern: /Leotheras/i, abilityIds: [37641], label: 'Whirlwind' }, // Demon-Form WW
+];
+const PARRY_PHASE_GAP_MS = 5000;
+
+async function detectExcludedPhases(reportCode, fight) {
+  for (const cfg of PARRY_EXCLUDE_PHASES) {
+    if (!cfg.pattern.test(fight.name)) continue;
+    const dt = await wclApi(`/report/events/damage-taken/${reportCode}`, {
+      start: fight.start_time, end: fight.end_time, hostility: 0
+    }).catch(() => ({ events: [] }));
+    const times = (dt.events || [])
+      .filter(e => e.ability && cfg.abilityIds.includes(e.ability.guid) && !e.sourceIsFriendly)
+      .map(e => e.timestamp)
+      .sort((a, b) => a - b);
+    if (!times.length) return [];
+    const phases = [];
+    let cur = [times[0]];
+    for (let i = 1; i < times.length; i++) {
+      if (times[i] - cur[cur.length - 1] > PARRY_PHASE_GAP_MS) {
+        phases.push([cur[0], cur[cur.length - 1]]);
+        cur = [times[i]];
+      } else cur.push(times[i]);
+    }
+    phases.push([cur[0], cur[cur.length - 1]]);
+    return phases;
+  }
+  return [];
+}
+
 async function analyzeParries(reportCode, bossFights, playerList) {
   const results = [];
   const idMap = new Map(playerList.map(p => [p.id, p]));
@@ -1506,6 +1538,8 @@ async function analyzeParries(reportCode, bossFights, playerList) {
     if (summary && summary.playerDetails && summary.playerDetails.tanks) {
       for (const t of summary.playerDetails.tanks) tankNames.add(t.name);
     }
+    const excludedPhases = await detectExcludedPhases(reportCode, f);
+    const inExcludedPhase = (t) => excludedPhases.some(([s, e]) => t >= s && t <= e);
     const evResp = await wclApi(`/report/events/damage-done/${reportCode}`, {
       start: f.start_time, end: f.end_time
     }).catch(() => ({ events: [] }));
@@ -1514,6 +1548,7 @@ async function analyzeParries(reportCode, bossFights, playerList) {
       if (e.hitType !== 8) continue;
       if (!e.ability || e.ability.guid !== 1) continue;
       if (!e.sourceIsFriendly) continue;
+      if (inExcludedPhase(e.timestamp)) continue;
       const p = idMap.get(e.sourceID);
       if (!p) continue;
       if (tankNames.has(p.name)) continue;
@@ -3912,6 +3947,8 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
     const tankSet = new Set();
     const pd = summary && summary.playerDetails || {};
     for (const t of (pd.tanks || [])) tankSet.add(t.name);
+    const excludedPhases = await detectExcludedPhases(reportCode, fight);
+    const inExcludedPhase = (t) => excludedPhases.some(([s, e]) => t >= s && t <= e);
     const evResp = await wclApi(`/report/events/damage-done/${reportCode}`, {
       start: fight.start_time, end: fight.end_time
     }, { nocache: true }).catch(() => ({ events: [] }));
@@ -3921,6 +3958,7 @@ async function analyzeLiveFight(reportCode, fight, reportStart) {
       if (e.hitType !== 8) continue;
       if (!e.ability || e.ability.guid !== 1) continue;
       if (!e.sourceIsFriendly) continue;
+      if (inExcludedPhase(e.timestamp)) continue;
       const p = idMap.get(e.sourceID);
       if (!p || tankSet.has(p.name)) continue;
       const cur = byPlayer.get(p.name) || { name: p.name, type: p.type, count: 0 };
